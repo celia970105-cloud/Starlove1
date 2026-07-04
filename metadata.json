@@ -1,0 +1,6 @@
+{
+  "name": "Starry Wish Support Platform",
+  "description": "星願應援站 - 全球明星應援星空社群平台。結合投稿審核、黑膠音樂播放器、星願信箱、藝廊展覽、影片區及星寵互動系統。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

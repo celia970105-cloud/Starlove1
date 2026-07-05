@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { LogIn, UserPlus, LogOut, CheckCircle, AlertCircle, Edit3, Image, Shield, Sparkles, FolderHeart } from "lucide-react";
+import { LogIn, UserPlus, LogOut, CheckCircle, AlertCircle, Edit3, Image, Shield, Sparkles, FolderHeart, RefreshCw, ExternalLink, FileText, X, Clock } from "lucide-react";
 import { User } from "../types";
 import { useLanguage } from "../context/LanguageContext";
 import { saveUserBackup } from "../lib/syncHelper";
@@ -46,8 +46,10 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
   const [upgradeError, setUpgradeError] = useState("");
 
   // User Submissions list state
-  const [userSubmissions, setUserSubmissions] = useState<{ id: string; title: string; type: string; status: string }[]>([]);
+  const [userSubmissions, setUserSubmissions] = useState<{ id: string; title: string; type: string; status: string; imageUrl?: string; content?: string; link?: string; timestamp?: string }[]>([]);
   const [isSubmissionsLoading, setIsSubmissionsLoading] = useState(false);
+  const [selectedSub, setSelectedSub] = useState<any | null>(null);
+  const [submissionFilter, setSubmissionFilter] = useState<string>("all");
 
   // Photo Album choices state
   const [galleryPhotos, setGalleryPhotos] = useState<any[]>([]);
@@ -109,36 +111,129 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
     if (!currentUser) return;
     setIsSubmissionsLoading(true);
     try {
-      const res = await fetch("/api/admin/all");
-      if (res.ok) {
-        const data = await res.json();
-        const combined: { id: string; title: string; type: string; status: string }[] = [];
-        
-        // Photos
-        data.photos.forEach((p: any) => {
-          if (p.user_id === currentUser.id) combined.push({ id: p.id, title: p.title, type: "相片", status: p.status });
-        });
-        // Videos
-        data.videos.forEach((v: any) => {
-          if (v.user_id === currentUser.id) combined.push({ id: v.id, title: v.title, type: "影片", status: v.status });
-        });
-        // Letters
-        data.letters.forEach((l: any) => {
-          if (l.user_id === currentUser.id) combined.push({ id: l.id, title: l.content.substring(0, 15) + "...", type: "信件", status: l.status });
-        });
-        // Artworks
-        data.artworks.forEach((a: any) => {
-          if (a.user_id === currentUser.id) combined.push({ id: a.id, title: a.title, type: "畫作", status: a.status });
-        });
-        // Music
-        data.music.forEach((m: any) => {
-          if (m.user_id === currentUser.id) combined.push({ id: m.id, title: m.title, type: "音樂", status: m.status });
-        });
+      const [adminRes, snapsRes] = await Promise.all([
+        fetch("/api/admin/all"),
+        fetch(`/api/friends/snaps?userId=${currentUser.id}`)
+      ]);
 
-        setUserSubmissions(combined);
+      let adminData: any = { photos: [], videos: [], letters: [], artworks: [], music: [] };
+      let snapsData: any[] = [];
+
+      if (adminRes.ok) {
+        adminData = await adminRes.json();
       }
+      if (snapsRes.ok) {
+        snapsData = await snapsRes.json();
+      }
+
+      const combined: { id: string; title: string; type: string; status: string; imageUrl?: string; content?: string; link?: string; timestamp?: string }[] = [];
+      
+      // Photos
+      if (adminData.photos) {
+        adminData.photos.forEach((p: any) => {
+          if (p.user_id === currentUser.id) {
+            combined.push({
+              id: p.id,
+              title: p.title || "未命名相片",
+              type: "相片",
+              status: p.status,
+              imageUrl: p.image_url,
+              timestamp: p.created_at,
+              content: p.category ? `分類: ${p.category}` : ""
+            });
+          }
+        });
+      }
+      // Videos
+      if (adminData.videos) {
+        adminData.videos.forEach((v: any) => {
+          if (v.user_id === currentUser.id) {
+            combined.push({
+              id: v.id,
+              title: v.title || "未命名影片",
+              type: "影片",
+              status: v.status,
+              link: v.video_url,
+              timestamp: v.created_at,
+              content: v.category ? `分類: ${v.category}` : ""
+            });
+          }
+        });
+      }
+      // Letters
+      if (adminData.letters) {
+        adminData.letters.forEach((l: any) => {
+          if (l.user_id === currentUser.id) {
+            combined.push({
+              id: l.id,
+              title: l.content ? (l.content.substring(0, 15) + "...") : "無內容信件",
+              type: "信件",
+              status: l.status,
+              content: l.content,
+              timestamp: l.created_at
+            });
+          }
+        });
+      }
+      // Artworks
+      if (adminData.artworks) {
+        adminData.artworks.forEach((a: any) => {
+          if (a.user_id === currentUser.id) {
+            combined.push({
+              id: a.id,
+              title: a.title || "未命名美術品",
+              type: "畫作",
+              status: a.status,
+              imageUrl: a.image_url,
+              link: a.external_link,
+              content: a.description,
+              timestamp: a.created_at
+            });
+          }
+        });
+      }
+      // Music
+      if (adminData.music) {
+        adminData.music.forEach((m: any) => {
+          if (m.user_id === currentUser.id) {
+            combined.push({
+              id: m.id,
+              title: m.title || "未命名音樂",
+              type: "音樂",
+              status: m.status,
+              imageUrl: m.cover_url,
+              link: m.audio_url,
+              timestamp: m.created_at
+            });
+          }
+        });
+      }
+
+      // Snaps (與好友共同飼養寵物互相發送的照片)
+      snapsData.forEach((s: any) => {
+        if (s.senderId === currentUser.id) {
+          combined.push({
+            id: s.id,
+            title: s.caption || "寵物合照",
+            type: "寵物相片",
+            status: "approved", // Snaps are sent directly and always approved/visible
+            imageUrl: s.imageUrl,
+            timestamp: s.timestamp,
+            content: `發送給: ${s.receiverName}`
+          });
+        }
+      });
+
+      // Sort by timestamp descending
+      combined.sort((a, b) => {
+        const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return tB - tA;
+      });
+
+      setUserSubmissions(combined);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching user submissions:", err);
     } finally {
       setIsSubmissionsLoading(false);
     }
@@ -330,6 +425,10 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
       setUpgradeError("無法與伺服器取得連線。");
     }
   };
+
+  const filteredSubmissions = submissionFilter === "all"
+    ? userSubmissions
+    : userSubmissions.filter(s => s.type === submissionFilter);
 
   return (
     <div className="w-full max-w-4xl mx-auto bg-white/80 backdrop-blur-md border border-[#FF799C]/20 rounded-[36px] p-6 shadow-xl relative text-left text-[#6E4B55]">
@@ -734,38 +833,87 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                 </div>
               </div>
 
-              {/* Submissions queue list */}
+              {/* Submissions queue list / Personal Database */}
               <div className="bg-[#FFF6F2]/50 border border-[#FF799C]/10 p-4 rounded-2xl space-y-3 shadow-inner">
-                <span className="text-[10px] font-mono tracking-widest text-[#6E4B55]/50 block mb-1 uppercase">
-                  SUBMISSION HISTORY ({userSubmissions.length})
-                </span>
+                <div className="flex justify-between items-center pb-1">
+                  <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF799C] flex items-center gap-1 uppercase">
+                    <FolderHeart className="h-3.5 w-3.5 animate-pulse text-[#FF799C]" />
+                    我的個人應援數據庫 ({filteredSubmissions.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={fetchUserSubmissions}
+                    disabled={isSubmissionsLoading}
+                    className="p-1 rounded-lg hover:bg-[#FF799C]/10 text-[#6E4B55]/70 hover:text-[#FF799C] transition-colors disabled:opacity-50 cursor-pointer"
+                    title="重新整理數據"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isSubmissionsLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+
+                {/* Database filter tabs */}
+                <div className="flex gap-1 overflow-x-auto pb-1.5 scrollbar-none">
+                  {["all", "相片", "影片", "音樂", "信件", "畫作", "寵物相片"].map((type) => {
+                    const count = type === "all" 
+                      ? userSubmissions.length 
+                      : userSubmissions.filter(s => s.type === type).length;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setSubmissionFilter(type)}
+                        className={`text-[9px] font-semibold px-2 py-1 rounded-lg transition-all shrink-0 cursor-pointer ${submissionFilter === type ? "bg-[#FF799C] text-white shadow-sm shadow-[#FF799C]/10" : "bg-white/70 text-[#6E4B55]/70 hover:bg-[#FFF6F2] hover:text-[#FF799C]"}`}
+                      >
+                        {type === "all" ? "全部" : type}({count})
+                      </button>
+                    );
+                  })}
+                </div>
 
                 <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                   {isSubmissionsLoading ? (
-                    <p className="text-xs text-[#6E4B55]/40 font-mono py-4 text-center">載入應援履歷中...</p>
-                  ) : userSubmissions.length === 0 ? (
-                    <div className="text-center py-6 text-xs font-serif text-[#6E4B55]/50">
-                      尚未提交過任何投稿項目。<br />
-                      快點擊上方各模組加入應援吧！
+                    <div className="text-center py-6">
+                      <RefreshCw className="h-4 w-4 text-[#FF799C] animate-spin mx-auto mb-1.5" />
+                      <p className="text-[10px] text-[#6E4B55]/40 font-mono">載入星光資料庫中...</p>
+                    </div>
+                  ) : filteredSubmissions.length === 0 ? (
+                    <div className="text-center py-8 text-xs font-serif text-[#6E4B55]/50 leading-relaxed bg-white/40 rounded-xl border border-dashed border-[#FF799C]/10">
+                      🌸 該分類目前尚無項目。<br />
+                      點擊上方對應板塊，馬上上傳你的作品吧！
                     </div>
                   ) : (
-                    userSubmissions.map((sub) => (
-                      <div
+                    filteredSubmissions.map((sub) => (
+                      <button
                         key={sub.id}
-                        className="flex justify-between items-center p-2.5 rounded-xl bg-white/80 border border-[#FF799C]/10 text-xs text-[#6E4B55]/90 hover:bg-[#FFF6F2]/60"
+                        type="button"
+                        onClick={() => setSelectedSub(sub)}
+                        className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/80 hover:bg-white border border-[#FF799C]/10 text-xs text-[#6E4B55]/90 hover:border-[#FF799C]/30 hover:shadow-sm transition-all text-left active:scale-[0.99] cursor-pointer"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] shrink-0 font-mono bg-[#FF799C]/10 text-[#FF799C] px-1.5 py-0.5 rounded">
-                            {sub.type}
-                          </span>
-                          <span className="truncate font-sans font-medium">{sub.title}</span>
+                          {sub.imageUrl ? (
+                            <div className="h-7 w-7 rounded-md overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
+                              <img src={sub.imageUrl} alt={sub.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                            </div>
+                          ) : (
+                            <div className="h-7 w-7 rounded-md bg-[#FF799C]/5 border border-[#FF799C]/10 flex items-center justify-center shrink-0">
+                              <FileText className="h-3.5 w-3.5 text-[#FF799C]/60" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="text-[8px] font-mono bg-[#FF799C]/10 text-[#FF799C] px-1 py-0.5 rounded mr-1.5 font-bold">
+                              {sub.type}
+                            </span>
+                            <span className="font-sans font-medium text-[#6E4B55] truncate inline-block align-middle max-w-[120px]">{sub.title}</span>
+                          </div>
                         </div>
 
                         {/* Status tag */}
-                        <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${sub.status === "approved" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : sub.status === "rejected" ? "bg-red-500/10 text-red-600 border border-red-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20 animate-pulse"}`}>
-                          {sub.status === "approved" ? "已公開" : sub.status === "rejected" ? "退回" : "審核中"}
-                        </span>
-                      </div>
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                          <span className={`text-[8px] font-mono font-bold px-2 py-0.5 rounded-full ${sub.status === "approved" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : sub.status === "rejected" ? "bg-red-500/10 text-red-600 border border-red-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20 animate-pulse"}`}>
+                            {sub.status === "approved" ? "已公開" : sub.status === "rejected" ? "退回" : "審核中"}
+                          </span>
+                        </div>
+                      </button>
                     ))
                   )}
                 </div>
@@ -899,6 +1047,122 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                 <span>立即註冊認領星寵 ✦</span>
               </button>
             </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Detailed Preview Modal overlay */}
+      <AnimatePresence>
+        {selectedSub && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#6E4B55]/40 backdrop-blur-sm"
+            onClick={() => setSelectedSub(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-white/95 border border-[#FF799C]/25 max-w-md w-full p-6 rounded-[28px] shadow-2xl relative text-left text-[#6E4B55] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Sparkle border decorative */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#FF799C] via-[#FFD2DD] to-[#FF799C]" />
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setSelectedSub(null)}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-[#FF799C]/15 text-[#6E4B55]/70 hover:text-[#FF799C] transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-center gap-1.5 text-[#FF799C] text-[10px] font-mono font-bold tracking-wider uppercase mb-2">
+                <Sparkles className="h-3 w-3 animate-pulse text-[#FF799C]" />
+                <span>個人應援庫項目 • {selectedSub.type}</span>
+              </div>
+
+              <h4 className="text-lg font-serif font-bold text-[#6E4B55] leading-snug mb-3 truncate">
+                {selectedSub.title}
+              </h4>
+
+              {/* Image Preview if available */}
+              {selectedSub.imageUrl && (
+                <div className="rounded-2xl overflow-hidden border border-[#FF799C]/20 bg-[#FFF6F2] mb-4 max-h-56 shadow-inner relative group">
+                  <img
+                    src={selectedSub.imageUrl}
+                    alt={selectedSub.title}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <a
+                    href={selectedSub.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute bottom-2 right-2 bg-[#6E4B55]/80 hover:bg-[#FF799C] text-white text-[10px] font-mono px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    <span>查看原圖</span>
+                  </a>
+                </div>
+              )}
+
+              {/* Content description if available */}
+              {selectedSub.content && (
+                <div className="bg-[#FFF6F2]/40 border-l-4 border-[#FF799C] p-3 rounded-r-xl text-xs text-[#6E4B55] italic whitespace-pre-wrap leading-relaxed mb-4 max-h-40 overflow-y-auto">
+                  {selectedSub.content}
+                </div>
+              )}
+
+              {/* Timestamp and Audit details */}
+              <div className="space-y-3 pt-2 border-t border-[#FF799C]/10 text-xs text-[#6E4B55]/70">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5 text-[#FF799C]/70" />
+                  <span>提交時間: {selectedSub.timestamp ? new Date(selectedSub.timestamp).toLocaleString("zh-TW") : "時光印記已存檔"}</span>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <div className="mt-0.5">
+                    {selectedSub.status === "approved" ? (
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                    ) : selectedSub.status === "rejected" ? (
+                      <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                    ) : (
+                      <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-[#6E4B55]">
+                      應援狀態: {selectedSub.status === "approved" ? "已公開 (Approved)" : selectedSub.status === "rejected" ? "退回 (Rejected)" : "審核中 (Pending Review)"}
+                    </span>
+                    <p className="text-[10px] text-[#6E4B55]/60 mt-0.5 leading-normal">
+                      {selectedSub.status === "approved"
+                        ? "恭喜！該應援項目已經核准並即時、永久寫入全局應援數據庫。所有人均可在應援大廳或對應專區看見您的星光足跡。"
+                        : selectedSub.status === "rejected"
+                        ? "您的項目暫時未通過安全審核，可能涉及敏感或無關內容。如有疑問，請調整後重新投稿。"
+                        : "稿件已妥善保存在您的個人專屬帳號資料庫中。待管理員安全稽核通過後，將即時發布至首頁。"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              {selectedSub.link && (
+                <a
+                  href={selectedSub.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-[#FF799C] hover:bg-[#FF799C]/90 text-white font-bold py-2.5 px-4 rounded-xl text-xs w-full flex items-center justify-center gap-1.5 mt-4 shadow-md shadow-[#FF799C]/10 transition-all active:scale-95 text-center"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>開啟連結 ({selectedSub.type === "音樂" ? "聽音樂" : "看影片"})</span>
+                </a>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

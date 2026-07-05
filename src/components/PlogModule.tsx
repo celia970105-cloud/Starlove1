@@ -89,6 +89,9 @@ const BG_TEMPLATES = [
 
 export default function PlogModule({ currentUser }: PlogModuleProps) {
   const [photos, setPhotos] = useState<PhotoPost[]>([]);
+  const [friendSnaps, setFriendSnaps] = useState<any[]>([]);
+  const [isSnapsLoading, setIsSnapsLoading] = useState(false);
+  const [activePhotoTab, setActivePhotoTab] = useState<"snaps" | "upload" | "presets">("snaps");
   const [elements, setElements] = useState<CollageElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentBg, setCurrentBg] = useState(BG_TEMPLATES[0]);
@@ -104,6 +107,26 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
   const [elementStartPos, setElementStartPos] = useState({ x: 0, y: 0 });
 
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Fetch friend snaps
+  useEffect(() => {
+    if (!currentUser) return;
+    setIsSnapsLoading(true);
+    fetch(`/api/friends/snaps?userId=${currentUser.id}`)
+      .then((res) => {
+        if (res.ok) return res.json();
+        return [];
+      })
+      .then((data) => {
+        setFriendSnaps(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load friend snaps:", err);
+      })
+      .finally(() => {
+        setIsSnapsLoading(false);
+      });
+  }, [currentUser]);
 
   // Fetch photos from API
   useEffect(() => {
@@ -874,48 +897,126 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
 
             {/* Sub Tabs: Photos vs Stickers */}
             <div className="flex flex-col flex-1">
-              <span className="text-[9px] text-[#FF799C] font-semibold mb-1">📷 星空相簿已上傳圖片：</span>
               
-              {isPhotosLoading ? (
-                <div className="flex justify-center items-center py-8 text-[10px] text-gray-400">
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5" /> 讀取相簿中...
-                </div>
-              ) : photos.length === 0 ? (
-                <div className="space-y-2 py-2">
-                  <div className="text-[9px] text-gray-400 bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-center leading-relaxed">
-                    您的相片庫目前還沒有審核通過的相片喔。別擔心！我們先為您提供了數張<b>超可愛萌寵範本圖</b>方便您立刻遊玩拼接：
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {PRESET_FALLBACK_IMAGES.map((img, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => addImageElement(img.url)}
-                        className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 hover:border-[#FF799C] transition-all hover:scale-105 cursor-pointer relative group"
-                        title={`新增 ${img.title}`}
-                      >
-                        <img src={img.url} alt="Fallback Preset" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                          <Plus className="h-4 w-4 text-white" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-4 gap-2 max-h-[140px] overflow-y-auto pr-1 py-1">
-                  {photos.map((photo) => (
-                    <button
-                      key={photo.id}
-                      onClick={() => addImageElement(photo.image_url)}
-                      className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 hover:border-[#FF799C] transition-all hover:scale-105 cursor-pointer relative group"
-                      title={photo.title}
-                    >
-                      <img src={photo.image_url} alt={photo.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                        <Plus className="h-4 w-4 text-white" />
+              {/* Photo Source Tabs */}
+              <div className="flex gap-1 bg-pink-50/50 p-1 rounded-xl mb-3 text-[9px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setActivePhotoTab("snaps")}
+                  className={`flex-1 py-1 rounded-lg transition-all cursor-pointer ${activePhotoTab === "snaps" ? "bg-[#FF799C] text-white shadow-xs" : "text-[#6E4B55]/70 hover:bg-white/50"}`}
+                >
+                  📸 拍立得照片
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePhotoTab("upload")}
+                  className={`flex-1 py-1 rounded-lg transition-all cursor-pointer ${activePhotoTab === "upload" ? "bg-[#FF799C] text-white shadow-xs" : "text-[#6E4B55]/70 hover:bg-white/50"}`}
+                >
+                  🖼️ 從本機相冊
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePhotoTab("presets")}
+                  className={`flex-1 py-1 rounded-lg transition-all cursor-pointer ${activePhotoTab === "presets" ? "bg-[#FF799C] text-white shadow-xs" : "text-[#6E4B55]/70 hover:bg-white/50"}`}
+                >
+                  🌸 推薦範本
+                </button>
+              </div>
+
+              {/* Tab Contents */}
+              {activePhotoTab === "snaps" && (
+                <div>
+                  {isSnapsLoading ? (
+                    <div className="flex justify-center items-center py-6 text-[10px] text-gray-400 font-mono">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5 text-[#FF799C]" /> 讀取拍立得照片牆中...
+                    </div>
+                  ) : friendSnaps.length === 0 ? (
+                    <div className="text-[9px] text-gray-400 bg-[#FFF5F7]/50 p-3 rounded-xl border border-pink-100/30 text-center leading-relaxed">
+                      💡 目前拍照記錄空空如也！請先在共同飼養區點擊好友列表旁的<b>「📷 拍立得」</b>拍照或發送相片，即可在此處點選拍攝過的照片，製作拼圖導出喔！🌸
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <span className="text-[8px] text-gray-400 font-mono">📸 選擇你或好友拍攝/發送過的照片：</span>
+                      <div className="grid grid-cols-4 gap-2 max-h-[140px] overflow-y-auto pr-1 py-1">
+                        {friendSnaps.map((snap) => (
+                          <button
+                            key={snap.id}
+                            onClick={() => addImageElement(snap.imageUrl)}
+                            className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 hover:border-[#FF799C] transition-all hover:scale-105 cursor-pointer relative group"
+                            title={snap.caption}
+                          >
+                            <img src={snap.imageUrl} alt="Polaroid snap" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                              <Plus className="h-4 w-4 text-white" />
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                    </button>
-                  ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activePhotoTab === "upload" && (
+                <div className="bg-[#FFF5F7]/30 border border-dashed border-[#FF799C]/30 p-3 rounded-xl text-center">
+                  <span className="text-[9px] text-gray-500 block mb-2 font-medium">📷 選擇你手機或本機相冊的照片，直接加入拼圖：</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          addImageElement(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="mx-auto text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-bold file:bg-[#FF799C]/10 file:text-[#FF799C] file:hover:bg-[#FF799C]/20 transition-all cursor-pointer"
+                  />
+                  <p className="text-[7.5px] text-gray-400 mt-2">支援 PNG, JPG 等手機相冊照片，即點即加 🌟</p>
+                </div>
+              )}
+
+              {activePhotoTab === "presets" && (
+                <div>
+                  {isPhotosLoading ? (
+                    <div className="flex justify-center items-center py-6 text-[10px] text-gray-400">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5" /> 讀取相簿中...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2 max-h-[140px] overflow-y-auto pr-1 py-1">
+                      {/* Presets Fallbacks */}
+                      {PRESET_FALLBACK_IMAGES.map((img, idx) => (
+                        <button
+                          key={`fallback-${idx}`}
+                          onClick={() => addImageElement(img.url)}
+                          className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 hover:border-[#FF799C] transition-all hover:scale-105 cursor-pointer relative group"
+                          title={`新增 ${img.title}`}
+                        >
+                          <img src={img.url} alt="Fallback Preset" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                            <Plus className="h-4 w-4 text-white" />
+                          </div>
+                        </button>
+                      ))}
+                      {/* Extra dynamically loaded gallery posts */}
+                      {photos.map((photo) => (
+                        <button
+                          key={photo.id}
+                          onClick={() => addImageElement(photo.image_url)}
+                          className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-100 hover:border-[#FF799C] transition-all hover:scale-105 cursor-pointer relative group"
+                          title={photo.title}
+                        >
+                          <img src={photo.image_url} alt={photo.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                            <Plus className="h-4 w-4 text-white" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

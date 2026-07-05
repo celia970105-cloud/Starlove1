@@ -8,11 +8,20 @@ import {
 import { User } from "../types";
 import PetsCanvasBoard from "./PetsCanvasBoard";
 import PlogModule from "./PlogModule";
+import { updateFriendsBackup } from "../lib/syncHelper";
 
 interface PetsModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
 }
+
+const SNAP_PRESET_IMAGES = [
+  { name: "🌸 蜜桃甜心", url: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500" },
+  { name: "🐱 星空萌貓", url: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500" },
+  { name: "🍓 草莓派對", url: "https://images.unsplash.com/photo-1569591159212-b02ea8a9f239?w=500" },
+  { name: "🥞 布丁萌星", url: "https://images.unsplash.com/photo-1477884213980-b111f22879f4?w=500" },
+  { name: "✨ 夢幻極光", url: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500" }
+];
 
 // Food / Treats inside the Refrigerator
 interface FoodItem {
@@ -207,7 +216,7 @@ interface FallingItem {
   char: string;
 }
 
-export default function PetsModule({ currentUser }: PetsModuleProps) {
+export default function PetsModule({ currentUser, onRefreshData }: PetsModuleProps) {
   const localKey = currentUser ? `local_star_pet_${currentUser.id}` : `local_star_pet_guest`;
 
   // Toggle Modes: "single" (Solo/Local) or "coparent" (Shared Home) or "friend" (Visiting Friend) or "plog" (PLOG Collage)
@@ -290,6 +299,17 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
   // Friend Addition Search
   const [friendSearch, setFriendSearch] = useState("");
   const [friendAddStatus, setFriendAddStatus] = useState({ success: false, error: "", message: "" });
+
+  // Friend Snaps / Polaroid states
+  const [friendSnaps, setFriendSnaps] = useState<any[]>([]);
+  const [selectedFriendForSnap, setSelectedFriendForSnap] = useState<any | null>(null);
+  const [snapCaption, setSnapCaption] = useState("");
+  const [snapSourceType, setSnapSourceType] = useState<"camera" | "upload">("camera");
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState(0);
+  const [uploadedSnapBase64, setUploadedSnapBase64] = useState("");
+  const [isSendingSnap, setIsSendingSnap] = useState(false);
+  const [snapMessage, setSnapMessage] = useState("");
+  const [snapError, setSnapError] = useState("");
 
   // Share Photo in Group state
   const [isSharingPhoto, setIsSharingPhoto] = useState(false);
@@ -459,6 +479,8 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
       if (resFriends.ok) {
         const data = await resFriends.json();
         setFriends(data);
+        // Sync friends backup
+        updateFriendsBackup(currentUser.email, data);
       }
 
       // Fetch user's coparenting groups
@@ -477,6 +499,13 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
         } else {
           setActiveGroup(null);
         }
+      }
+
+      // Fetch user's friend snaps
+      const resSnaps = await fetch(`/api/friends/snaps?userId=${currentUser.id}`);
+      if (resSnaps.ok) {
+        const snapsData = await resSnaps.json();
+        setFriendSnaps(snapsData);
       }
     } catch (e) {
       console.error("Error loading coparent data:", e);
@@ -1946,31 +1975,12 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
                   <p className="text-[9px] text-emerald-600 font-medium">{friendAddStatus.message}</p>
                 )}
 
-                {/* SUGGESTION BUTTONS FOR RAPID DEMONSTRATION */}
-                <div className="bg-[#FFF4F7]/40 p-2.5 rounded-xl border border-[#FF799C]/10 space-y-1.5">
-                  <span className="text-[9px] text-gray-400 block font-mono">💡 快速測試推薦好友：</span>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {SUGGESTED_FRIENDS.map(f => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={async () => {
-                          setFriendSearch(f.username);
-                        }}
-                        className="bg-white hover:bg-[#FFF4F7] border border-[#FF799C]/15 px-2 py-0.5 rounded-full text-[9px] text-[#6E4B55] transition-all"
-                      >
-                        +{f.username}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* FRIENDS LIST ROW */}
                 <div className="space-y-1.5 border-t border-[#FF799C]/10 pt-2.5">
                   <h4 className="text-[10px] font-bold text-gray-500">🌸 我的好友清單 ({friends.length})</h4>
                   {friends.length === 0 ? (
                     <p className="text-[9px] text-gray-400 leading-normal">
-                      目前好友列表空空的，點擊上面的推薦好友按鈕，再點擊右邊的「添加」按鈕，快速建立你的友誼吧！🌟
+                      目前好友列表空空的，請在上方輸入好友的用戶名 (如: ZackLover) 或 Email，點擊「添加」好友，開啟多人共同飼養與拍立得互動吧！🌟
                     </p>
                   ) : (
                     <div className="flex gap-2 overflow-x-auto pb-1 max-w-full">
@@ -1997,9 +2007,22 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
                                 console.error(e);
                               }
                             }}
-                            className="bg-[#FF799C]/10 hover:bg-[#FF799C]/20 text-[#FF799C] text-[8px] font-bold px-1.5 py-0.5 rounded-lg ml-1 shrink-0 transition-all cursor-pointer active:scale-95 animate-pulse"
+                            className="bg-[#FF799C]/10 hover:bg-[#FF799C]/20 text-[#FF799C] text-[8px] font-bold px-1.5 py-0.5 rounded-lg ml-1 shrink-0 transition-all cursor-pointer active:scale-95"
                           >
                             互動 ✦
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFriendForSnap(friend);
+                              setSnapCaption("");
+                              setUploadedSnapBase64("");
+                              setSnapMessage("");
+                              setSnapError("");
+                            }}
+                            className="bg-purple-100 hover:bg-purple-200 text-purple-600 text-[8px] font-bold px-1.5 py-0.5 rounded-lg ml-1 shrink-0 transition-all cursor-pointer active:scale-95 flex items-center gap-0.5"
+                          >
+                            📷 拍立得
                           </button>
                           <button
                             type="button"
@@ -2013,6 +2036,38 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
                     </div>
                   )}
                 </div>
+
+                {/* POLAROID ALBUM LOG */}
+                {friendSnaps.length > 0 && (
+                  <div className="space-y-1.5 border-t border-[#FF799C]/10 pt-2.5">
+                    <h4 className="text-[10px] font-bold text-[#FF799C] flex items-center gap-1">
+                      <span>📸 拍立得照片牆 (共 {friendSnaps.length} 張)</span>
+                    </h4>
+                    <div className="flex gap-3 overflow-x-auto pb-2 pt-1 max-w-full">
+                      {friendSnaps.map((snap: any) => {
+                        const isSent = snap.senderId === currentUser?.id;
+                        const isGroup = snap.receiverId?.startsWith("group_");
+                        return (
+                          <div key={snap.id} className="bg-white p-2 pb-3 rounded-lg border border-gray-100 shadow-md shrink-0 w-[110px] text-center hover:scale-105 hover:rotate-0 transition-all duration-300 transform rotate-[-1deg]">
+                            <div className="aspect-square w-full overflow-hidden rounded bg-gray-50 border border-gray-100 relative group">
+                              <img src={snap.imageUrl || undefined} alt="Snap" className="h-full w-full object-cover" />
+                              <div className="absolute top-1 left-1 bg-white/90 backdrop-blur-xs text-[7px] px-1 py-0.2 rounded font-sans text-[#FF799C]">
+                                {isSent ? "📤 已發送" : "📥 已收到"}
+                              </div>
+                            </div>
+                            <p className="text-[9px] font-bold text-[#6E4B55] truncate mt-1">
+                              {isGroup ? `🏡 ${snap.receiverName}` : (isSent ? `To: ${snap.receiverName}` : `From: ${snap.senderName}`)}
+                            </p>
+                            <p className="text-[8px] text-gray-400 truncate italic">"{snap.caption}"</p>
+                            <span className="text-[6.5px] text-gray-400 block mt-0.5 font-mono">
+                              {new Date(snap.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -2140,6 +2195,223 @@ export default function PetsModule({ currentUser }: PetsModuleProps) {
             initialDataUrl={currentCustomSkin}
             petName={currentPetName}
           />
+        )}
+      </AnimatePresence>
+
+      {/* FRIEND POLAROID SNAP MODAL */}
+      <AnimatePresence>
+        {selectedFriendForSnap && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-[#FFF5F7] to-white rounded-3xl p-5 max-w-sm w-full border border-[#FF799C]/30 shadow-2xl relative overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedFriendForSnap(null)}
+                className="absolute top-4 right-4 text-[#6E4B55] hover:text-[#FF799C] transition-all cursor-pointer p-1 rounded-full bg-white/80"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <h3 className="text-xs font-bold text-[#6E4B55] flex items-center gap-1.5 mb-4">
+                <Camera className="h-4 w-4 text-[#FF799C]" />
+                與 <span className="text-[#FF799C] underline">{selectedFriendForSnap.username}</span> 的拍立得時光
+              </h3>
+
+              {/* Source Switcher */}
+              <div className="flex gap-1.5 bg-pink-100/50 p-1 rounded-xl mb-4 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setSnapSourceType("camera")}
+                  className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${snapSourceType === "camera" ? "bg-white text-[#FF799C] shadow-xs" : "text-[#6E4B55]/70"}`}
+                >
+                  📷 萌寵鏡頭
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSnapSourceType("upload")}
+                  className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${snapSourceType === "upload" ? "bg-white text-[#FF799C] shadow-xs" : "text-[#6E4B55]/70"}`}
+                >
+                  🖼️ 本機相冊
+                </button>
+              </div>
+
+              {/* Polaroid Frame Preview Card */}
+              <div className="bg-white p-3 pb-4 rounded-xl shadow-lg border border-pink-100 max-w-[210px] mx-auto rotate-[1deg] mb-4">
+                <div className="aspect-square w-full rounded-md bg-gray-50 border border-gray-100 overflow-hidden relative flex items-center justify-center">
+                  {snapSourceType === "camera" ? (
+                    <img
+                      src={SNAP_PRESET_IMAGES[selectedPresetIndex].url}
+                      alt="Preset"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : uploadedSnapBase64 ? (
+                    <img
+                      src={uploadedSnapBase64}
+                      alt="Uploaded"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center p-3">
+                      <Image className="h-6 w-6 text-gray-300 mx-auto mb-1 animate-pulse" />
+                      <span className="text-[9px] text-gray-400 block font-sans">點選下方按鈕上傳</span>
+                    </div>
+                  )}
+                  {/* Polaroid Cute Frame Sticker Accent */}
+                  <div className="absolute top-1 right-1 bg-[#FF799C] text-white text-[6px] px-1 py-0.2 rounded font-sans rotate-[5deg] uppercase tracking-wider font-bold">
+                    Lovely
+                  </div>
+                </div>
+
+                {/* Captions Text Inside Frame */}
+                <div className="mt-3 text-center">
+                  <p className="text-[10px] text-[#6E4B55] font-serif italic truncate max-w-full">
+                    {snapCaption.trim() || "✨ 跟你分享這張超級可愛的照片！📸"}
+                  </p>
+                  <span className="text-[6px] text-gray-300 block font-mono mt-1">
+                    {new Date().toLocaleDateString()} • Polaroid
+                  </span>
+                </div>
+              </div>
+
+              {/* Controls */}
+              {snapSourceType === "camera" ? (
+                <div className="space-y-1.5 mb-4">
+                  <span className="text-[8px] text-gray-400 block font-mono">🎨 選擇萌萌寵物鏡頭特效：</span>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 max-w-full">
+                    {SNAP_PRESET_IMAGES.map((img, idx) => (
+                      <button
+                        key={img.name}
+                        type="button"
+                        onClick={() => setSelectedPresetIndex(idx)}
+                        className={`px-2 py-1 rounded-full text-[9px] font-bold shrink-0 border transition-all cursor-pointer ${selectedPresetIndex === idx ? "bg-[#FF799C] text-white border-[#FF799C]" : "bg-white text-gray-500 border-gray-100 hover:bg-pink-50"}`}
+                      >
+                        {img.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <label className="block text-[8px] text-gray-400 font-mono mb-1">📂 從本機或手機相冊選擇相片：</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setUploadedSnapBase64(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-[9px] text-gray-500 bg-white border border-pink-100 rounded-xl px-2.5 py-1.5 focus:outline-none file:mr-2 file:py-0.5 file:px-2 file:rounded-lg file:border-0 file:text-[8px] file:font-bold file:bg-[#FF799C]/10 file:text-[#FF799C]"
+                  />
+                </div>
+              )}
+
+              {/* Handwritten Comment Box */}
+              <div className="mb-4">
+                <label className="block text-[8px] text-gray-400 font-mono mb-1">✍️ 手寫暖心悄悄話：</label>
+                <input
+                  type="text"
+                  placeholder="寫下你想對好友說的話 (限 15 字) 🌸"
+                  maxLength={15}
+                  value={snapCaption}
+                  onChange={(e) => setSnapCaption(e.target.value)}
+                  className="w-full bg-white border border-[#FF799C]/20 rounded-xl px-3 py-1.5 text-[10px] focus:outline-none focus:border-[#FF799C] text-[#6E4B55]"
+                />
+              </div>
+
+              {/* Tips and status message */}
+              <p className="text-[8px] text-gray-400 leading-normal text-center mb-3">
+                💡 拍立得照片將永遠保存於雙方的「照片牆」，且可隨時於 <b>Plog 區域</b> 製作成拼圖導出！
+              </p>
+
+              {snapError && (
+                <p className="text-[9px] text-red-500 font-medium text-center mb-3 bg-red-50 py-1 rounded-lg border border-red-100">{snapError}</p>
+              )}
+              {snapMessage && (
+                <p className="text-[9px] text-emerald-600 font-bold text-center mb-3 bg-emerald-50 py-1 rounded-lg border border-emerald-100">{snapMessage}</p>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFriendForSnap(null)}
+                  className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 text-[10px] font-bold py-2 rounded-xl transition-all cursor-pointer active:scale-95"
+                >
+                  關閉
+                </button>
+                <button
+                  type="button"
+                  disabled={isSendingSnap}
+                  onClick={async () => {
+                    if (!currentUser || !selectedFriendForSnap) return;
+                    setIsSendingSnap(true);
+                    setSnapError("");
+                    setSnapMessage("");
+
+                    const imageUrl = snapSourceType === "camera" 
+                      ? SNAP_PRESET_IMAGES[selectedPresetIndex].url 
+                      : uploadedSnapBase64;
+
+                    if (!imageUrl) {
+                      setSnapError("請先選擇或上傳一張照片！🌸");
+                      setIsSendingSnap(false);
+                      return;
+                    }
+
+                    try {
+                      const res = await fetch("/api/friends/send-snap", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          senderId: currentUser.id,
+                          receiverId: selectedFriendForSnap.id,
+                          imageUrl,
+                          caption: snapCaption.trim() || "✨ 跟你分享這張超級可愛的照片！📸"
+                        })
+                      });
+
+                      const data = await res.json();
+                      if (res.ok) {
+                        setSnapMessage(data.message || "✨ 發送成功！");
+                        if (onRefreshData) onRefreshData();
+                        
+                        // Fetch snaps right away to refresh the UI
+                        const resSnaps = await fetch(`/api/friends/snaps?userId=${currentUser.id}`);
+                        if (resSnaps.ok) {
+                          const snapsData = await resSnaps.json();
+                          setFriendSnaps(snapsData);
+                        }
+
+                        setTimeout(() => {
+                          setSelectedFriendForSnap(null);
+                        }, 1500);
+                      } else {
+                        setSnapError(data.error || "發送失敗");
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      setSnapError("連線失敗，請稍後再試");
+                    } finally {
+                      setIsSendingSnap(false);
+                    }
+                  }}
+                  className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] hover:opacity-90 text-white text-[10px] font-bold py-2 rounded-xl transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1 shadow-md disabled:opacity-50"
+                >
+                  {isSendingSnap ? "發送中..." : "確認發送 📸"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

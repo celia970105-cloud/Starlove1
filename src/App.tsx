@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Star, Camera, Film, Mail, Palette, Music, Sparkles, Smile, Shield, User as UserIcon, Heart, Compass, Layout } from "lucide-react";
 import { useLanguage } from "./context/LanguageContext";
+import { saveUserBackup, restoreUserBackup } from "./lib/syncHelper";
 
 // Components
 import StarryBackground from "./components/StarryBackground";
@@ -128,6 +129,15 @@ export default function App() {
         const data = await res.json();
         setCurrentUser(data.user);
         localStorage.setItem("starry_current_user", JSON.stringify(data.user));
+        // Back up user details in local storage
+        saveUserBackup(data.user);
+      } else if (res.status === 404 && currentUser.email) {
+        // Automatically restore from client backup if user got wiped from ephemeral database!
+        const restoredUser = await restoreUserBackup(currentUser.email);
+        if (restoredUser) {
+          setCurrentUser(restoredUser);
+          localStorage.setItem("starry_current_user", JSON.stringify(restoredUser));
+        }
       }
     } catch (e) {
       console.error("Failed to refresh current user:", e);
@@ -147,6 +157,7 @@ export default function App() {
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem("starry_current_user", JSON.stringify(user));
+    saveUserBackup(user);
   };
 
   const handleLogout = () => {
@@ -192,21 +203,21 @@ export default function App() {
       </AnimatePresence>
 
       {/* Header Bar */}
-      <header className="sticky top-0 z-40 bg-[#FFF6F2]/75 backdrop-blur-md border-b border-[#FF799C]/15 py-4 px-6 transition-all text-[#6E4B55]">
+      <header className="sticky top-0 z-40 bg-[#FFF6F2]/75 backdrop-blur-md border-b border-[#FF799C]/15 py-3 sm:py-4 px-3 sm:px-6 transition-all text-[#6E4B55]">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           {/* Logo Brand */}
           <div 
             onClick={() => setActiveModule("home")}
-            className="flex items-center gap-2 cursor-pointer group"
+            className="flex items-center gap-1.5 sm:gap-2 cursor-pointer group"
           >
-            <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-[#FF799C] to-[#FFCCDD] flex items-center justify-center shadow-lg shadow-[#FF799C]/20 transition-transform group-hover:scale-105">
-              <Star className="h-5 w-5 text-white fill-current animate-spin-slow" />
+            <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-gradient-to-tr from-[#FF799C] to-[#FFCCDD] flex items-center justify-center shadow-lg shadow-[#FF799C]/20 transition-transform group-hover:scale-105">
+              <Star className="h-4 w-4 sm:h-5 sm:w-5 text-white fill-current animate-spin-slow" />
             </div>
             <div className="text-left">
-              <span className="text-[10px] font-mono tracking-[0.25em] text-[#FF799C] block uppercase font-bold">
+              <span className="text-[9px] sm:text-[10px] font-mono tracking-[0.2em] sm:tracking-[0.25em] text-[#FF799C] block uppercase font-bold truncate max-w-[90px] sm:max-w-none">
                 {t("all_for_jiyu")}
               </span>
-              <h1 className="text-lg font-serif font-light tracking-widest text-[#FF799C]">
+              <h1 className="text-sm sm:text-lg font-serif font-light tracking-widest text-[#FF799C]">
                 {t("starry_support")}
               </h1>
             </div>
@@ -257,26 +268,26 @@ export default function App() {
             {currentUser ? (
               <button
                 onClick={() => setActiveModule("user")}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${activeModule === "user" ? "bg-[#FF799C] text-white border-[#FF799C]" : "bg-white/50 border-[#FF799C]/15 hover:bg-white text-[#6E4B55]"}`}
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border transition-all ${activeModule === "user" ? "bg-[#FF799C] text-white border-[#FF799C]" : "bg-white/50 border-[#FF799C]/15 hover:bg-white text-[#6E4B55]"}`}
               >
-                <div className="h-6 w-6 rounded-full overflow-hidden border border-[#FF799C]/20 bg-white/10 flex items-center justify-center">
+                <div className="h-5 w-5 sm:h-6 sm:w-6 rounded-full overflow-hidden border border-[#FF799C]/20 bg-white/10 flex items-center justify-center">
                   {currentUser.avatar ? (
                     <img src={currentUser.avatar} alt="avatar" className="h-full w-full" />
                   ) : (
                     <div className="w-full h-full bg-[#FF799C]/10" />
                   )}
                 </div>
-                <span className="text-xs text-[#6E4B55]/90 font-medium truncate max-w-[80px]">
+                <span className="text-[11px] sm:text-xs text-[#6E4B55]/90 font-medium truncate max-w-[60px] sm:max-w-[80px]">
                   {currentUser.username}
                 </span>
               </button>
             ) : (
               <button
                 onClick={() => setActiveModule("user")}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white text-xs font-semibold tracking-wider px-4 py-2 rounded-xl shadow-md transition-all active:scale-95"
+                className="flex items-center gap-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white text-[11px] sm:text-xs font-semibold tracking-wider px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl shadow-md transition-all active:scale-95"
               >
-                <UserIcon className="h-3.5 w-3.5" />
-                <span>登入帳號</span>
+                <UserIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                <span>登入</span>
               </button>
             )}
           </div>
@@ -305,7 +316,7 @@ export default function App() {
       </div>
 
       {/* Main Container Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 relative z-10 text-[#6E4B55] has-[.fridge-open]:z-50 has-[.modal-open-layer]:z-50">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8 pb-24 md:pb-8 relative z-10 text-[#6E4B55] has-[.fridge-open]:z-50 has-[.modal-open-layer]:z-50">
         <AnimatePresence mode="wait">
           {activeModule === "home" && (
             /* Home Visual + Stars Grid Entry */
@@ -321,16 +332,16 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                 
                 {/* Left 3D style girl visual (7 Cols) */}
-                <div className="lg:col-span-7 flex flex-col items-center justify-center relative min-h-[420px]">
+                <div className="lg:col-span-7 flex flex-col items-center justify-center relative min-h-[420px] w-full">
                   {/* Decorative glowing tags */}
-                  <div className="absolute top-0 left-4 text-left">
-                    <span className="text-[10px] font-mono tracking-[0.4em] text-[#FF799C] block uppercase font-bold">
+                  <div className="md:absolute md:top-0 md:left-4 text-left w-full mb-6 md:mb-0">
+                    <span className="text-[9px] md:text-[10px] font-mono tracking-[0.25em] md:tracking-[0.4em] text-[#FF799C] block uppercase font-bold">
                       ZACK • EXCLUSIVE DEBUT • JEREMY
                     </span>
-                    <h2 id="home-hero-title" className="text-4xl md:text-5xl font-serif font-light text-[#FF799C] tracking-widest mt-2 leading-tight">
+                    <h2 id="home-hero-title" className="text-2xl sm:text-3xl md:text-5xl font-serif font-light text-[#FF799C] tracking-widest mt-2 leading-tight">
                       {!heroTitle || heroTitle === "ALL FOR JIYU" || heroTitle === "極禹 TOP 1 雙向奔赴" ? t("hero_title") : heroTitle}
                     </h2>
-                    <p className="text-[#6E4B55]/70 text-xs mt-3 tracking-widest max-w-md font-sans leading-relaxed">
+                    <p className="text-[#6E4B55]/70 text-[11px] md:text-xs mt-3 tracking-widest max-w-md font-sans leading-relaxed">
                       {!heroSub || heroSub.startsWith("ALL FOR JIYU - 專屬 Jiyu") || heroSub.startsWith("在這裡記錄每一次") ? t("hero_sub") : heroSub}
                     </p>
                   </div>
@@ -351,7 +362,7 @@ export default function App() {
                         setSparkles([]);
                       }, 750);
                     }}
-                    className="relative mt-28 md:mt-24 h-[330px] w-full flex items-center justify-center cursor-pointer group select-none"
+                    className="relative mt-6 md:mt-24 h-[300px] md:h-[330px] w-full flex items-center justify-center cursor-pointer group select-none"
                     title={t("portal_tip")}
                   >
                     {/* Glowing background star aura */}
@@ -707,8 +718,32 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#FFF6F2]/95 backdrop-blur-md border-t border-[#FF799C]/15 py-2 px-2 flex justify-around items-center text-[#6E4B55] shadow-[0_-4px_12px_rgba(255,121,156,0.08)]">
+        <button
+          onClick={() => setActiveModule("home")}
+          className={`flex flex-col items-center gap-0.5 min-w-[56px] transition-colors ${activeModule === "home" ? "text-[#FF799C]" : "text-[#6E4B55]/60"}`}
+        >
+          <Star className="h-5 w-5 fill-current opacity-90" />
+          <span className="text-[9px] font-medium tracking-tight">主頁</span>
+        </button>
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveModule(item.id)}
+              className={`flex flex-col items-center gap-0.5 min-w-[56px] transition-colors ${activeModule === item.id ? "text-[#FF799C]" : "text-[#6E4B55]/60"}`}
+            >
+              <Icon className="h-5 w-5" />
+              <span className="text-[9px] font-medium tracking-tight truncate max-w-[56px]">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Floating Star Pet Companion in corner (隨機出現在網站互動) */}
-      <div className="fixed bottom-6 right-6 z-40 flex items-end gap-3 pointer-events-none">
+      <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 flex items-end gap-3 pointer-events-none">
         <AnimatePresence>
           {showCompanionBubble && (
             <motion.div

@@ -554,6 +554,17 @@ export function translateString(text: string, targetLang: LanguageType): string 
   return text;
 }
 
+export function safeClosest(el: any, selector: string): boolean {
+  try {
+    if (el && typeof el.closest === "function") {
+      return !!el.closest(selector);
+    }
+  } catch (e) {
+    // Ignore DOMExceptions from closest() on SVGs or disconnected nodes in certain browsers
+  }
+  return false;
+}
+
 export function applyTranslation(root: Node, lang: LanguageType) {
   // Translate text nodes using TreeWalker
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -566,7 +577,7 @@ export function applyTranslation(root: Node, lang: LanguageType) {
         continue;
       }
       // Skip home-hero-title as requested by the user
-      if (parent.closest("#home-hero-title") || parent.closest("[data-no-translate]")) {
+      if (safeClosest(parent, "#home-hero-title") || safeClosest(parent, "[data-no-translate]")) {
         continue;
       }
     }
@@ -596,7 +607,7 @@ export function applyTranslation(root: Node, lang: LanguageType) {
   const inputs = document.querySelectorAll("input, textarea");
   inputs.forEach((inputEl) => {
     const el = inputEl as HTMLInputElement | HTMLTextAreaElement;
-    if (el.closest("#home-hero-title") || el.closest("[data-no-translate]")) {
+    if (safeClosest(el, "#home-hero-title") || safeClosest(el, "[data-no-translate]")) {
       return;
     }
     const placeholder = el.getAttribute("placeholder");
@@ -622,7 +633,7 @@ export function applyTranslation(root: Node, lang: LanguageType) {
   const options = document.querySelectorAll("option");
   options.forEach((optEl) => {
     const el = optEl as HTMLOptionElement;
-    if (el.closest("#home-hero-title") || el.closest("[data-no-translate]")) {
+    if (safeClosest(el, "#home-hero-title") || safeClosest(el, "[data-no-translate]")) {
       return;
     }
     const text = el.textContent;

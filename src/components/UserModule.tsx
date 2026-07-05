@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { LogIn, UserPlus, LogOut, CheckCircle, AlertCircle, Edit3, Image, Shield, Sparkles, FolderHeart } from "lucide-react";
 import { User } from "../types";
 import { useLanguage } from "../context/LanguageContext";
+import { saveUserBackup } from "../lib/syncHelper";
 
 interface UserModuleProps {
   currentUser: User | null;
@@ -159,6 +160,8 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
         // Retain saved login credentials
         localStorage.setItem("starry_saved_email", loginEmail);
         localStorage.setItem("starry_saved_password", loginPassword);
+        // Back up user to client-side storage
+        saveUserBackup(data.user, loginPassword);
       } else {
         const data = await res.json();
         setLoginError(data.error || "登入失敗，請確認信箱密碼。");
@@ -186,6 +189,17 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
 
       if (res.ok) {
         setRegSuccess(true);
+        
+        // Create an initial backup in local storage
+        saveUserBackup({
+          id: "",
+          username: regUsername,
+          email: regEmail,
+          role: "user",
+          avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${regUsername}`,
+          background: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+          star_coins: 100
+        }, regPassword);
         
         // Clear login inputs so they must manually type and log in themselves
         setLoginEmail("");
@@ -257,6 +271,8 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
       if (res.ok) {
         const data = await res.json();
         onLoginSuccess(data.user);
+        // Save the updated backup!
+        saveUserBackup(data.user);
         setProfileSuccess(true);
         setTimeout(() => setProfileSuccess(false), 2000);
       } else {
@@ -293,6 +309,10 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
         const data = await res.json();
         setUpgradeSuccess(true);
         onLoginSuccess(data.user);
+        // Retain upgraded login credentials
+        localStorage.setItem("starry_saved_email", upgradeEmail);
+        localStorage.setItem("starry_saved_password", upgradePassword);
+        saveUserBackup(data.user, upgradePassword);
         if (refreshCurrentUser) {
           refreshCurrentUser();
         }

@@ -60,6 +60,7 @@ const SEED_DATA = {
   friendships: [] as any[],
   coparent_groups: [] as any[],
   interactions: [] as any[],
+  friend_snaps: [] as any[],
   last_hourly_trigger: new Date().toISOString()
 };
 
@@ -77,6 +78,10 @@ function readDb() {
     let modified = false;
     if (!data.friendships) {
       data.friendships = [];
+      modified = true;
+    }
+    if (!data.friend_snaps) {
+      data.friend_snaps = [];
       modified = true;
     }
     if (!data.coparent_groups) {
@@ -369,6 +374,98 @@ app.post("/api/users/update", (req, res) => {
 
   const { password: _, ...userWithoutPassword } = db.users[userIdx];
   res.json({ user: userWithoutPassword });
+});
+
+// Auto-Restore Backup Sync Endpoint
+app.post("/api/users/sync-backup", (req, res) => {
+  const { username, email, password, avatar, background, star_coins, solo_pet, friends } = req.body;
+  if (!email || !password || !username) {
+    return res.status(400).json({ error: "Missing required backup details" });
+  }
+
+  const db = readDb();
+  const cleanEmail = email.trim().toLowerCase();
+  
+  let user = db.users.find(u => u.email.trim().toLowerCase() === cleanEmail);
+  let isNew = false;
+
+  if (!user) {
+    // Recreate the user!
+    isNew = true;
+    const newId = String(db.users.length + 1);
+    user = {
+      id: newId,
+      username: username.trim(),
+      email: cleanEmail,
+      password: password,
+      role: "user",
+      avatar: avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${username}`,
+      background: background || "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+      star_coins: star_coins !== undefined ? star_coins : 100,
+      solo_pet: solo_pet || null
+    };
+    db.users.push(user);
+
+    // Also register starter pet if they don't have solo_pet
+    if (!solo_pet) {
+      const starterPet = {
+        id: `pet_${Date.now()}`,
+        name: `${username}'s Pet`,
+        owner_id: user.id,
+        owner_name: username,
+        xp: 0,
+        level: 1,
+        type: "Star Bunny",
+        color: "Pink",
+        custom_appearance: { accessory: "None", vibe: "Cute" },
+        home_json: { decor: "Stardust", bed: "Cloud Bed" },
+        created_at: new Date().toISOString()
+      };
+      db.pets.push(starterPet);
+    }
+  } else {
+    // If user exists, verify password or merge their coin balance if local is higher
+    if (user.password !== password) {
+      return res.status(401).json({ error: "Password mismatch" });
+    }
+    if (star_coins !== undefined && star_coins > (user.star_coins || 0)) {
+      user.star_coins = star_coins;
+    }
+    if (solo_pet) {
+      user.solo_pet = solo_pet;
+    }
+    if (avatar) user.avatar = avatar;
+    if (background) user.background = background;
+  }
+
+  // Restore friendships!
+  if (Array.isArray(friends) && friends.length > 0) {
+    friends.forEach((friendObj: any) => {
+      if (!friendObj || (!friendObj.email && !friendObj.username)) return;
+      
+      const fQuery = (friendObj.email || friendObj.username).toLowerCase().trim();
+      const targetFriend = db.users.find(u => 
+        u.email.trim().toLowerCase() === fQuery || 
+        u.username.trim().toLowerCase() === fQuery
+      );
+
+      if (targetFriend) {
+        // Re-establish friendship if not already exist
+        const exists = db.friendships.some(
+          (f: any) => (f.userId1 === user.id && f.userId2 === targetFriend.id) ||
+                      (f.userId1 === targetFriend.id && f.userId2 === user.id)
+        );
+        if (!exists) {
+          db.friendships.push({ userId1: user.id, userId2: targetFriend.id });
+        }
+      }
+    });
+  }
+
+  writeDb(db);
+
+  const { password: _, ...userWithoutPassword } = user;
+  res.json({ success: true, isNew, user: userWithoutPassword });
 });
 
 // Get User Profile Detail
@@ -778,6 +875,87 @@ app.post("/api/friends/interact", (req, res) => {
   });
 });
 
+// Friends API: Fetch all snaps sent or received by a user
+app.get("/api/friends/snaps", (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ error: "缺少 userId" });
+  }
+  const db = readDb();
+  
+  // Find groups where this user is a member
+  const userGroupIds = db.coparent_groups
+    .filter((g: any) => g.member_ids && g.member_ids.includes(userId))
+    .map((g: any) => "group_" + g.id);
+
+  // Return all snaps where sender is this user, OR receiver is this user, OR receiver is a group the user belongs to
+  const snaps = (db.friend_snaps || []).filter(
+    (s: any) => s.senderId === userId || s.receiverId === userId || userGroupIds.includes(s.receiverId)
+  );
+
+  // Sort by timestamp descending
+  snaps.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  res.json(snaps);
+});
+
+// Friends API: Send a snap to a friend (or take a photo)
+app.post("/api/friends/send-snap", (req, res) => {
+  const { senderId, receiverId, imageUrl, caption } = req.body;
+  if (!senderId || !receiverId || !imageUrl) {
+    return res.status(400).json({ error: "缺少必要參數" });
+  }
+
+  const db = readDb();
+  const senderUser = db.users.find((u: any) => u.id === senderId);
+  const receiverUser = db.users.find((u: any) => u.id === receiverId);
+
+  if (!senderUser || !receiverUser) {
+    return res.status(404).json({ error: "找不到該用戶" });
+  }
+
+  // Cooldown check: 1 hour for taking/sending a photo
+  const userSnaps = (db.friend_snaps || []).filter((s: any) => s.senderId === senderId);
+  if (userSnaps.length > 0) {
+    // Sort by timestamp descending to find latest
+    userSnaps.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const lastSnap = userSnaps[0];
+    const lastTime = new Date(lastSnap.timestamp).getTime();
+    const now = Date.now();
+    const oneHourMs = 60 * 60 * 1000;
+    if (now - lastTime < oneHourMs) {
+      const remainingMs = oneHourMs - (now - lastTime);
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      return res.status(400).json({ error: `拍照/上傳冷卻中！每小時限拍/傳一張相片，還需要等待 ${remainingMin} 分鐘 ⏱️` });
+    }
+  }
+
+  const newSnap = {
+    id: `snap_${Date.now()}`,
+    senderId,
+    senderName: senderUser.username,
+    receiverId,
+    receiverName: receiverUser.username,
+    imageUrl,
+    caption: caption || "✨ 跟你分享這張超級可愛的照片！📸",
+    timestamp: new Date().toISOString()
+  };
+
+  if (!db.friend_snaps) db.friend_snaps = [];
+  db.friend_snaps.unshift(newSnap);
+
+  // Give sender reward
+  senderUser.star_coins = (senderUser.star_coins || 0) + 50;
+
+  writeDb(db);
+
+  res.json({
+    success: true,
+    snap: newSnap,
+    message: `✨ 照片成功發送給 ${receiverUser.username}！你獲得了 50 星星幣 🪙！`
+  });
+});
+
 // Friends API: Fetch a friend's pet home room details
 app.get("/api/friends/room/:friendId", (req, res) => {
   const { friendId } = req.params;
@@ -1114,6 +1292,18 @@ app.post("/api/coparent/action", (req, res) => {
 
     if (!group.photos) group.photos = [];
     group.photos.unshift(newPhoto);
+
+    if (!db.friend_snaps) db.friend_snaps = [];
+    db.friend_snaps.unshift({
+      id: newPhoto.id,
+      senderId: userId,
+      senderName: userObj?.username || "成員",
+      receiverId: "group_" + group.id,
+      receiverName: group.name,
+      imageUrl: image_url,
+      caption: newPhoto.caption,
+      timestamp: newPhoto.timestamp
+    });
 
     message = `上傳成功！家庭獲得了 ${coinsEarned} 星星幣 🪙，你個人也獲得了 50 星星幣 🪙！`;
   }

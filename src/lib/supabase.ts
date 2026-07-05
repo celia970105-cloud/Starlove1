@@ -125,7 +125,32 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       .from("starry_state")
       .upsert({ key, value });
     if (error) {
-      console.error(`Supabase write failed for key ${key}:`, error);
+      console.warn(`Supabase upsert failed for key ${key} (trying fallback update/insert):`, error.message, error.details, error.hint, error);
+      
+      // Fallback 1: Try updating the existing key directly
+      const { error: updateError } = await supabase
+        .from("starry_state")
+        .update({ value })
+        .eq("key", key);
+        
+      if (updateError) {
+        console.warn(`Supabase fallback update failed for key ${key} (trying fallback insert):`, updateError.message, updateError);
+        
+        // Fallback 2: Try inserting a new row
+        const { error: insertError } = await supabase
+          .from("starry_state")
+          .insert({ key, value });
+          
+        if (insertError) {
+          console.error(`Supabase fallback insert failed for key ${key}:`, insertError.message, insertError);
+          // Standard error log matching user's expectation for tracking
+          console.error(`Supabase write failed for key ${key}:`, insertError);
+        } else {
+          console.log(`Supabase fallback insert succeeded for key ${key}`);
+        }
+      } else {
+        console.log(`Supabase fallback update succeeded for key ${key}`);
+      }
     }
   } catch (err) {
     console.error(`Supabase write failed for key ${key}:`, err);

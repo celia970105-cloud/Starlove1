@@ -93,7 +93,11 @@ export default function App() {
     const savedUser = localStorage.getItem("starry_current_user");
     if (savedUser) {
       try {
-        setCurrentUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.email?.trim().toLowerCase() === "celia970105@gmail.com") {
+          parsed.role = "admin";
+        }
+        setCurrentUser(parsed);
       } catch (e) {
         console.error(e);
       }
@@ -127,6 +131,9 @@ export default function App() {
       const res = await fetch(`/api/users/profile/${currentUser.id}`);
       if (res.ok) {
         const data = await res.json();
+        if (data.user && data.user.email?.trim().toLowerCase() === "celia970105@gmail.com") {
+          data.user.role = "admin";
+        }
         setCurrentUser(data.user);
         localStorage.setItem("starry_current_user", JSON.stringify(data.user));
         // Back up user details in local storage
@@ -135,6 +142,9 @@ export default function App() {
         // Automatically restore from client backup if user got wiped from ephemeral database!
         const restoredUser = await restoreUserBackup(currentUser.email);
         if (restoredUser) {
+          if (restoredUser.email?.trim().toLowerCase() === "celia970105@gmail.com") {
+            restoredUser.role = "admin";
+          }
           setCurrentUser(restoredUser);
           localStorage.setItem("starry_current_user", JSON.stringify(restoredUser));
         }
@@ -155,6 +165,9 @@ export default function App() {
   }, [currentUser?.id]);
 
   const handleLoginSuccess = (user: User) => {
+    if (user && user.email?.trim().toLowerCase() === "celia970105@gmail.com") {
+      user.role = "admin";
+    }
     setCurrentUser(user);
     localStorage.setItem("starry_current_user", JSON.stringify(user));
     saveUserBackup(user);
@@ -258,10 +271,10 @@ export default function App() {
             {currentUser?.role === "admin" && (
               <button
                 onClick={() => setActiveModule("admin")}
-                className={`hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full border border-[#FF799C]/30 bg-[#FF799C]/10 text-[#FF799C] text-[10px] font-mono font-bold tracking-wider uppercase transition-all hover:bg-[#FF799C]/20 active:scale-95 ${activeModule === "admin" ? "ring-2 ring-[#FF799C]" : ""}`}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full border border-[#FF799C]/30 bg-[#FF799C]/10 text-[#FF799C] text-[10px] font-mono font-bold tracking-wider uppercase transition-all hover:bg-[#FF799C]/20 active:scale-95 ${activeModule === "admin" ? "ring-2 ring-[#FF799C]" : ""}`}
               >
                 <Shield className="h-3 w-3" />
-                <span>ADMIN PANEL</span>
+                <span>ADMIN</span>
               </button>
             )}
 
@@ -701,6 +714,7 @@ export default function App() {
                 onLoginSuccess={handleLoginSuccess}
                 onLogout={handleLogout}
                 refreshCurrentUser={refreshCurrentUser}
+                onNavigateToAdmin={() => setActiveModule("admin")}
               />
             </motion.div>
           )}
@@ -740,6 +754,15 @@ export default function App() {
             </button>
           );
         })}
+        {currentUser?.role === "admin" && (
+          <button
+            onClick={() => setActiveModule("admin")}
+            className={`flex flex-col items-center gap-0.5 min-w-[56px] transition-colors ${activeModule === "admin" ? "text-[#FF799C]" : "text-[#6E4B55]/60"}`}
+          >
+            <Shield className="h-5 w-5 animate-pulse" />
+            <span className="text-[9px] font-medium tracking-tight">審核</span>
+          </button>
+        )}
       </div>
 
       {/* Floating Star Pet Companion in corner (隨機出現在網站互動) */}

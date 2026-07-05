@@ -10,9 +10,10 @@ interface UserModuleProps {
   onLoginSuccess: (user: User) => void;
   onLogout: () => void;
   refreshCurrentUser?: () => void;
+  onNavigateToAdmin?: () => void;
 }
 
-export default function UserModule({ currentUser, onLoginSuccess, onLogout, refreshCurrentUser }: UserModuleProps) {
+export default function UserModule({ currentUser, onLoginSuccess, onLogout, refreshCurrentUser, onNavigateToAdmin }: UserModuleProps) {
   const { t } = useLanguage();
   // Tabs: 'login' | 'register' | 'profile'
   const [activeTab, setActiveTab] = useState<"login" | "register" | "profile">("login");
@@ -372,13 +373,25 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                   <Edit3 className="h-5 w-5 text-[#FF799C]" />
                   個人資料設定
                 </h3>
-                <button
-                  onClick={onLogout}
-                  className="text-xs bg-red-500/10 border border-red-500/20 text-red-600 hover:bg-red-500/20 px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span>登出</span>
-                </button>
+                <div className="flex gap-2">
+                  {currentUser.role === "admin" && onNavigateToAdmin && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToAdmin}
+                      className="text-xs bg-[#FF799C]/10 border border-[#FF799C]/20 text-[#FF799C] hover:bg-[#FF799C]/20 px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer font-bold font-mono tracking-wide"
+                    >
+                      <Shield className="h-3.5 w-3.5 animate-pulse" />
+                      <span>進入管理員控台</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={onLogout}
+                    className="text-xs bg-red-500/10 border border-red-500/20 text-red-600 hover:bg-red-500/20 px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>登出</span>
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleUpdateProfile} className="space-y-5">

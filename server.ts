@@ -1,7 +1,6 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -64,12 +63,18 @@ const SEED_DATA = {
   last_hourly_trigger: new Date().toISOString()
 };
 
+let dbCache: any = null;
+
 // Database helper functions
 function readDb() {
+  if (dbCache) {
+    return dbCache;
+  }
   try {
     if (!fs.existsSync(DB_FILE)) {
       fs.writeFileSync(DB_FILE, JSON.stringify(SEED_DATA, null, 2), "utf8");
-      return SEED_DATA;
+      dbCache = JSON.parse(JSON.stringify(SEED_DATA));
+      return dbCache;
     }
     const content = fs.readFileSync(DB_FILE, "utf8");
     const data = JSON.parse(content);
@@ -139,15 +144,18 @@ function readDb() {
     if (modified) {
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf8");
     }
-    return data;
+    dbCache = data;
+    return dbCache;
   } catch (err) {
     console.error("Error reading database file, resetting to seeds", err);
-    return SEED_DATA;
+    dbCache = JSON.parse(JSON.stringify(SEED_DATA));
+    return dbCache;
   }
 }
 
 function writeDb(data: any) {
   try {
+    dbCache = data;
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf8");
   } catch (err) {
     console.error("Error writing database file", err);
@@ -1320,22 +1328,30 @@ app.post("/api/coparent/action", (req, res) => {
 });
 
 // Mount Vite / Static files
-if (process.env.NODE_ENV !== "production") {
-  createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa"
-  }).then((vite) => {
-    app.use(vite.middlewares);
-    
-    // Fallback index.html for SPA router
-    app.get("*", (req, res) => {
-      const indexHtml = path.join(process.cwd(), "index.html");
-      res.sendFile(indexHtml);
-    });
+const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.join(process.cwd(), "dist"));
 
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running in development on http://localhost:${PORT}`);
+if (!isProduction) {
+  import("vite").then(({ createServer }) => {
+    createServer({
+      server: { middlewareMode: true },
+      appType: "spa"
+    }).then((vite) => {
+      app.use(vite.middlewares);
+      
+      // Fallback index.html for SPA router
+      app.get("*", (req, res) => {
+        const indexHtml = path.join(process.cwd(), "index.html");
+        res.sendFile(indexHtml);
+      });
+
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running in development on http://localhost:${PORT}`);
+      });
+    }).catch((err) => {
+      console.error("Failed to configure Vite development server:", err);
     });
+  }).catch((err) => {
+    console.error("Failed to load Vite package for development:", err);
   });
 } else {
   const distPath = path.join(process.cwd(), "dist");

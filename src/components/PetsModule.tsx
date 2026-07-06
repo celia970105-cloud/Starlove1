@@ -779,12 +779,12 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
           "bg-[#FFF0F4]/90 text-[#FF5B7E] border-[#FF5B7E]/20"
         ][Math.floor(Math.random() * 3)]
       };
-      setDanmakus((prev) => [...prev, newDanmaku]);
+      setDanmakus([newDanmaku]);
 
-      // Automatically remove danmaku item after 6 seconds
+      // Automatically remove danmaku item after 5 seconds
       const timer = setTimeout(() => {
         setDanmakus((prev) => prev.filter((d) => d.id !== newDanmaku.id));
-      }, 6000);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [bubbleText]);
@@ -797,12 +797,12 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
         text: `【${autoConversation.speakerName}】${autoConversation.text}`,
         color: "bg-purple-50 text-[#8E44AD] border-purple-100 font-bold"
       };
-      setDanmakus((prev) => [...prev, newDanmaku]);
+      setDanmakus([newDanmaku]);
 
-      // Automatically remove danmaku item after 6 seconds
+      // Automatically remove danmaku item after 5 seconds
       const timer = setTimeout(() => {
         setDanmakus((prev) => prev.filter((d) => d.id !== newDanmaku.id));
-      }, 6000);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [autoConversation]);
@@ -2322,7 +2322,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             </div>
             
             <div className="relative w-full h-8 overflow-hidden mt-3 pl-2 flex items-center">
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {danmakus.length === 0 ? (
                   <motion.div
                     key="empty-danmaku"
@@ -2334,18 +2334,18 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                     寵物房間很安靜，輕輕觸摸星寵或與牠們聊天，聽聽牠們的心聲吧 ✨
                   </motion.div>
                 ) : (
-                  <div className="flex gap-2 flex-wrap overflow-hidden">
+                  <div className="w-full flex items-center justify-start overflow-hidden">
                     {danmakus.map((d) => (
                       <motion.div
                         key={d.id}
-                        initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                        initial={{ opacity: 0, scale: 0.9, x: 30 }}
                         animate={{ opacity: 1, scale: 1, x: 0 }}
-                        exit={{ opacity: 0, scale: 0.8, x: -20 }}
-                        transition={{ type: "spring", stiffness: 100, damping: 15 }}
-                        className={`text-[10px] font-bold px-3 py-1 rounded-full border shadow-sm flex items-center gap-1.5 whitespace-nowrap ${d.color}`}
+                        exit={{ opacity: 0, scale: 0.9, x: -30 }}
+                        transition={{ type: "spring", stiffness: 120, damping: 16 }}
+                        className={`text-[10px] font-bold px-3 py-1.5 rounded-full border shadow-sm flex items-center gap-1.5 whitespace-nowrap max-w-full truncate ${d.color}`}
                       >
-                        <span className="text-[10px]">💬</span>
-                        {d.text}
+                        <span className="text-[10px] shrink-0">💬</span>
+                        <span className="truncate">{d.text}</span>
                       </motion.div>
                     ))}
                   </div>

@@ -1918,7 +1918,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       }
 
       const friendSnaps = await getDbKey("friend_snaps");
-      const userSnaps = friendSnaps.filter((s: any) => s.senderId === senderId);
+      const userSnaps = friendSnaps.filter((s: any) => s.senderId === senderId && s.receiverId === receiverId);
       if (userSnaps.length > 0) {
         userSnaps.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         const lastSnap = userSnaps[0];
@@ -1928,7 +1928,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         if (now - lastTime < oneHourMs) {
           const remainingMs = oneHourMs - (now - lastTime);
           const remainingMin = Math.ceil(remainingMs / 60000);
-          return jsonResponse({ error: `拍照/上傳冷卻中！每小時限拍/傳一張相片，還需要等待 ${remainingMin} 分鐘 ⏱️` }, 400);
+          return jsonResponse({ error: `拍照/上傳冷卻中！與該好友每小時限互傳一張相片，還需要等待 ${remainingMin} 分鐘 ⏱️` }, 400);
         }
       }
 
@@ -1946,6 +1946,21 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
       friendSnaps.unshift(newSnap);
       await setDbKey("friend_snaps", friendSnaps);
+
+      // Save also to posts_photos (the Supabase plog area) with category 'FriendSnap'
+      const postsPhotos = await getDbKey("posts_photos");
+      postsPhotos.push({
+        id: `photo_snap_${Date.now()}`,
+        user_id: senderId,
+        username: senderUser.username,
+        status: "approved",
+        created_at: new Date().toISOString(),
+        title: caption || "與好友互傳照片 🌸",
+        image_url: imgUrl,
+        year: String(new Date().getFullYear()),
+        category: "FriendSnap"
+      });
+      await setDbKey("posts_photos", postsPhotos);
 
       senderUser.star_coins = (senderUser.star_coins || 0) + 50;
       await setDbKey("users", users);

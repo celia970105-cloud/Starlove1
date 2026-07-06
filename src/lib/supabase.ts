@@ -55,12 +55,49 @@ const SEED_DATA = {
   posts_letters: [] as any[],
   posts_artworks: [] as any[],
   posts_music: [] as any[],
+  posts_candies: [
+    {
+      id: "c_seed_1",
+      user_id: "anonymous",
+      username: "極禹大糖推廣員",
+      status: "approved",
+      title: "櫻花蜜桃爆米花糖 🍿",
+      content: "張極在雙生舞台對視唱高音時，眼神裡滿滿全都是溫柔笑意，那一刻的雙向奔赴簡直甜到心坎，爆發出無數戀愛小泡泡！✨",
+      is_anonymous: false,
+      created_at: new Date(Date.now() - 3600000 * 24).toISOString()
+    },
+    {
+      id: "c_seed_2",
+      user_id: "anonymous",
+      username: "匿名的甜味星星",
+      status: "approved",
+      title: "草莓起泡薄荷糖 🍓",
+      content: "澤禹在後台直播吃水果時，張極二話不說一邊聊天一邊極其自然地遞紙巾。這種滲透到骨子底的日常細節小動作才是最致命最甜的糖點！🌸",
+      is_anonymous: true,
+      created_at: new Date(Date.now() - 3600000 * 12).toISOString()
+    },
+    {
+      id: "c_seed_3",
+      user_id: "anonymous",
+      username: "吉羽星宿守护者",
+      status: "approved",
+      title: "雙子星閃爍跳跳糖 🌌",
+      content: "兩人在運動會並肩奔跑、互相加油擊掌，最後擁抱的那一瞬間。少年人的默契和雙向守護是治癒一切的星光！💖",
+      is_anonymous: false,
+      created_at: new Date(Date.now() - 3600000 * 2).toISOString()
+    }
+  ] as any[],
   pets: [] as any[],
   friendships: [] as any[],
   coparent_groups: [] as any[],
   interactions: [] as any[],
   friend_snaps: [] as any[],
-  last_hourly_trigger: new Date().toISOString()
+  last_hourly_trigger: new Date().toISOString(),
+  leaderboard_state: {
+    date: new Date().toISOString().split("T")[0],
+    users: {}
+  },
+  leaderboard_history: []
 };
 
 // Storage bucket & table configurations
@@ -72,12 +109,15 @@ const DB_KEYS = [
   "posts_letters",
   "posts_artworks",
   "posts_music",
+  "posts_candies",
   "pets",
   "friendships",
   "coparent_groups",
   "interactions",
   "friend_snaps",
-  "last_hourly_trigger"
+  "last_hourly_trigger",
+  "leaderboard_state",
+  "leaderboard_history"
 ];
 
 // Helper to read database key
@@ -186,6 +226,117 @@ export async function setDbKey(key: string, value: any): Promise<void> {
   } catch (err) {
     console.warn(`Supabase write failed for key ${key}:`, err);
   }
+}
+
+// Check and perform daily reset on 00:00 for the leaderboard
+export async function checkLeaderboardDailyReset(): Promise<void> {
+  const todayStr = new Date().toISOString().split("T")[0];
+  
+  let state = await getDbKey("leaderboard_state");
+  if (!state || typeof state !== "object" || !state.date) {
+    state = {
+      date: todayStr,
+      users: {}
+    };
+    await setDbKey("leaderboard_state", state);
+    return;
+  }
+  
+  // If the stored date is today, no reset is needed.
+  if (state.date === todayStr) {
+    return;
+  }
+  
+  const previousDate = state.date;
+  const previousUsers = state.users || {};
+  
+  // Sort users on previous day by score desc
+  const sortedUsers = Object.entries(previousUsers).map(([id, item]: [string, any]) => ({
+    id,
+    username: item.username,
+    avatar: item.avatar,
+    activeSeconds: item.activeSeconds || 0,
+    submissions: item.submissions || 0,
+    score: item.score || 0
+  })).sort((a, b) => b.score - a.score);
+  
+  // Create top 10 rankings and calculate rewards
+  const topTen = sortedUsers.slice(0, 10).map((user, index) => {
+    const rank = index + 1;
+    let coinsAwarded = 200;
+    if (rank === 1) coinsAwarded = 1000;
+    else if (rank === 2) coinsAwarded = 800;
+    else if (rank === 3) coinsAwarded = 600;
+    else if (rank <= 5) coinsAwarded = 400;
+    
+    return {
+      ...user,
+      rank,
+      coinsAwarded
+    };
+  });
+  
+  // Award star coins to the top 10 users
+  if (topTen.length > 0) {
+    const usersList = await getDbKey("users") || [];
+    let changed = false;
+    for (const topUser of topTen) {
+      const idx = usersList.findIndex((u: any) => u.id === topUser.id);
+      if (idx !== -1) {
+        usersList[idx].star_coins = (usersList[idx].star_coins || 0) + topUser.coinsAwarded;
+        if (usersList[idx].solo_pet) {
+          usersList[idx].solo_pet.coins = (usersList[idx].solo_pet.coins || 0) + topUser.coinsAwarded;
+        }
+        changed = true;
+      }
+    }
+    if (changed) {
+      await setDbKey("users", usersList);
+    }
+  }
+  
+  // Save historical record to history
+  const history = await getDbKey("leaderboard_history") || [];
+  history.push({
+    date: previousDate,
+    topTen
+  });
+  await setDbKey("leaderboard_history", history);
+  
+  // Reset for the new day
+  state.date = todayStr;
+  state.users = {};
+  await setDbKey("leaderboard_state", state);
+  
+  console.log(`🏆 [LEADERBOARD RESET] Saved history for ${previousDate}, reset today to ${todayStr}.`);
+}
+
+// Track and record posts on the leaderboard
+export async function recordLeaderboardPost(userId: string, username: string, avatar: string): Promise<void> {
+  if (!userId || userId === "anonymous") return;
+  
+  await checkLeaderboardDailyReset();
+  
+  const state = await getDbKey("leaderboard_state");
+  if (!state.users) {
+    state.users = {};
+  }
+  
+  if (!state.users[userId]) {
+    state.users[userId] = {
+      username: username || "星願支持者",
+      avatar: avatar || "",
+      activeSeconds: 0,
+      submissions: 0,
+      score: 0
+    };
+  }
+  
+  state.users[userId].submissions = (state.users[userId].submissions || 0) + 1;
+  state.users[userId].score = (state.users[userId].activeSeconds || 0) + (state.users[userId].submissions * 300);
+  
+  await setDbKey("leaderboard_state", state);
+  console.log(`🏆 [LEADERBOARD POST] Recorded sub for ${username}, score is now ${state.users[userId].score}`);
 }
 
 // Initialize / Sync DB
@@ -319,7 +470,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         const { data, error } = await supabase.from("posts").select("*").eq("status", "approved");
         if (!error && data) allPosts = data;
       } else {
-        const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+        const pTypes = ["photos", "videos", "letters", "artworks", "music", "candies"];
         for (const pt of pTypes) {
           const list = await getDbKey(`posts_${pt}`);
           allPosts.push(...list.filter((x: any) => x.status === "approved"));
@@ -435,7 +586,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
             let postAuthorId = "";
             let postTitle = "無標題";
             let postType = "unknown";
-            const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+            const pTypes = ["photos", "videos", "letters", "artworks", "music", "candies"];
             for (const pt of pTypes) {
               const list = await getDbKey(`posts_${pt}`);
               const found = list.find((x: any) => x.id === postId);
@@ -525,7 +676,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
             let postAuthorId = "";
             let postTitle = "無標題";
             let postType = "unknown";
-            const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+            const pTypes = ["photos", "videos", "letters", "artworks", "music", "candies"];
             for (const pt of pTypes) {
               const list = await getDbKey(`posts_${pt}`);
               const found = list.find((x: any) => x.id === postId);
@@ -664,7 +815,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           let postAuthorId = "";
           let postTitle = "無標題";
           let postType = "unknown";
-          const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+          const pTypes = ["photos", "videos", "letters", "artworks", "music", "candies"];
           for (const pt of pTypes) {
             const list = await getDbKey(`posts_${pt}`);
             const found = list.find((x: any) => x.id === postId);
@@ -1063,7 +1214,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
     // 8. POST /api/users/sync-backup
     if (pathParts[0] === "users" && pathParts[1] === "sync-backup" && method === "POST") {
-      const { username, email, password, avatar, background, star_coins, solo_pet, friends } = body || {};
+      const { username, email, password, avatar, background, star_coins, solo_pet, friends, candies } = body || {};
       if (!email || !password || !username) {
         return jsonResponse({ error: "Missing required backup details" }, 400);
       }
@@ -1143,6 +1294,34 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         await setDbKey("friendships", friendships);
       }
 
+      // Add candies backups if available
+      if (Array.isArray(candies) && candies.length > 0) {
+        const postsCandies = await getDbKey("posts_candies");
+        for (const candyObj of candies) {
+          if (!candyObj || !candyObj.title || !candyObj.content) continue;
+          const exists = postsCandies.some(
+            (c: any) => c.id === candyObj.id || (c.title === candyObj.title && c.content === candyObj.content)
+          );
+          if (!exists) {
+            postsCandies.push({
+              id: candyObj.id || `candy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              title: candyObj.title,
+              content: candyObj.content,
+              is_anonymous: Boolean(candyObj.is_anonymous),
+              user_id: user.id,
+              username: candyObj.username || user.username,
+              status: candyObj.status || "approved",
+              created_at: candyObj.created_at || new Date().toISOString(),
+              likes_count: candyObj.likes_count || 0,
+              favorites_count: candyObj.favorites_count || 0,
+              comments_count: candyObj.comments_count || 0,
+              storage_url: candyObj.storage_url || null
+            });
+          }
+        }
+        await setDbKey("posts_candies", postsCandies);
+      }
+
       const { password: _, ...userWithoutPassword } = user;
       return jsonResponse({ success: true, isNew, user: userWithoutPassword });
     }
@@ -1163,6 +1342,115 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       }
       const { password: _, ...userWithoutPassword } = user;
       return jsonResponse({ user: userWithoutPassword });
+    }
+
+    // --- LEADERBOARD API ENDPOINTS ---
+    
+    // GET /api/leaderboard/current
+    if (pathParts[0] === "leaderboard" && pathParts[1] === "current" && method === "GET") {
+      await checkLeaderboardDailyReset();
+      const state = await getDbKey("leaderboard_state") || {};
+      const usersList = await getDbKey("users") || [];
+      
+      const rawUsers = state.users || {};
+      const sorted = Object.entries(rawUsers).map(([id, item]: [string, any]) => {
+        const realU = usersList.find((u: any) => u.id === id);
+        return {
+          id,
+          username: realU?.username || item.username || "星願支持者",
+          avatar: realU?.avatar || item.avatar || "",
+          activeSeconds: item.activeSeconds || 0,
+          submissions: item.submissions || 0,
+          score: item.score || 0
+        };
+      }).sort((a, b) => b.score - a.score);
+
+      const ranked = sorted.map((item, idx) => ({
+        ...item,
+        rank: idx + 1
+      }));
+
+      const topTen = ranked.slice(0, 10);
+
+      let currentUserStats: any = null;
+      if (currentUserId) {
+        const callerReal = usersList.find((u: any) => u.id === currentUserId);
+        const myRankItem = ranked.find((r) => r.id === currentUserId);
+        if (myRankItem) {
+          currentUserStats = myRankItem;
+        } else if (callerReal) {
+          currentUserStats = {
+            id: currentUserId,
+            username: callerReal.username,
+            avatar: callerReal.avatar,
+            activeSeconds: 0,
+            submissions: 0,
+            score: 0,
+            rank: "Unranked"
+          };
+        }
+      }
+
+      return jsonResponse({
+        date: state.date,
+        leaderboard: topTen,
+        currentUserStats
+      });
+    }
+
+    // GET /api/leaderboard/history
+    if (pathParts[0] === "leaderboard" && pathParts[1] === "history" && method === "GET") {
+      const history = await getDbKey("leaderboard_history") || [];
+      const sortedHistory = [...history].sort((a: any, b: any) => b.date.localeCompare(a.date));
+      return jsonResponse(sortedHistory);
+    }
+
+    // POST /api/leaderboard/heartbeat
+    if (pathParts[0] === "leaderboard" && pathParts[1] === "heartbeat" && method === "POST") {
+      if (!currentUserId) {
+        return jsonResponse({ error: "Only logged in users can participate" }, 401);
+      }
+      
+      const { activeSeconds } = body || {};
+      const increment = Number(activeSeconds) || 0;
+      if (increment <= 0 || increment > 60) {
+        return jsonResponse({ error: "Invalid increment value" }, 400);
+      }
+      
+      await checkLeaderboardDailyReset();
+      const state = await getDbKey("leaderboard_state") || {};
+      if (!state.users) {
+        state.users = {};
+      }
+      
+      const usersList = await getDbKey("users") || [];
+      const userObj = usersList.find((u: any) => u.id === currentUserId);
+      if (!userObj) {
+        return jsonResponse({ error: "User not found" }, 404);
+      }
+      
+      if (!state.users[currentUserId]) {
+        state.users[currentUserId] = {
+          username: userObj.username,
+          avatar: userObj.avatar,
+          activeSeconds: 0,
+          submissions: 0,
+          score: 0
+        };
+      }
+      
+      state.users[currentUserId].activeSeconds = (state.users[currentUserId].activeSeconds || 0) + increment;
+      state.users[currentUserId].score = (state.users[currentUserId].activeSeconds || 0) + ((state.users[currentUserId].submissions || 0) * 300);
+      
+      await setDbKey("leaderboard_state", state);
+      
+      return jsonResponse({ 
+        success: true, 
+        userStats: {
+          id: currentUserId,
+          ...state.users[currentUserId]
+        }
+      });
     }
 
     // 10. GET /api/posts/:type
@@ -1190,6 +1478,9 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         const users = await getDbKey("users");
         const uIdx = users.findIndex((u: any) => u.id === userId);
         if (uIdx !== -1) {
+          // Record this submission on today's leaderboard
+          await recordLeaderboardPost(userId, users[uIdx].username, users[uIdx].avatar);
+          
           if (!users[uIdx].daily_post_coins) {
             users[uIdx].daily_post_coins = {};
           }
@@ -1301,6 +1592,26 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         await setDbKey(`posts_${type}`, collection);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
+
+      if (type === "candies") {
+        const title = (payload.title || "").trim();
+        const content = (payload.content || "").trim();
+        if (!title) {
+          return jsonResponse({ error: "請填寫糖果名稱！" }, 400);
+        }
+        if (!content) {
+          return jsonResponse({ error: "請填寫糖點分析內容！" }, 400);
+        }
+        const post = {
+          ...basePost,
+          title,
+          content,
+          is_anonymous: Boolean(payload.is_anonymous)
+        };
+        collection.push(post);
+        await setDbKey(`posts_${type}`, collection);
+        return jsonResponse({ success: true, post, earnedCoins, coinMessage });
+      }
     }
 
     // 12. GET /api/admin/pending
@@ -1310,13 +1621,15 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       const letters = await getDbKey("posts_letters");
       const artworks = await getDbKey("posts_artworks");
       const music = await getDbKey("posts_music");
+      const candies = await getDbKey("posts_candies");
 
       const pending = {
         photos: photos.filter((p: any) => p.status === "pending"),
         videos: videos.filter((v: any) => v.status === "pending"),
         letters: letters.filter((l: any) => l.status === "pending"),
         artworks: artworks.filter((a: any) => a.status === "pending"),
-        music: music.filter((m: any) => m.status === "pending")
+        music: music.filter((m: any) => m.status === "pending"),
+        candies: candies.filter((c: any) => c.status === "pending")
       };
       return jsonResponse(pending);
     }
@@ -1328,6 +1641,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       const letters = await getDbKey("posts_letters");
       const artworks = await getDbKey("posts_artworks");
       const music = await getDbKey("posts_music");
+      const candies = await getDbKey("posts_candies");
       const users = await getDbKey("users");
       const pets = await getDbKey("pets");
 
@@ -1337,6 +1651,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         letters,
         artworks,
         music,
+        candies,
         users: users.map((u: any) => ({ id: u.id, username: u.username, email: u.email, role: u.role, avatar: u.avatar })),
         pets
       });
@@ -1351,6 +1666,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       else if (type === "letters" || type === "letter") key = "posts_letters";
       else if (type === "artworks" || type === "artwork") key = "posts_artworks";
       else if (type === "music") key = "posts_music";
+      else if (type === "candies" || type === "candy") key = "posts_candies";
       else if (type === "users" || type === "user") key = "users";
       else if (type === "pets" || type === "pet") key = "pets";
 
@@ -1399,6 +1715,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       else if (type === "letters" || type === "letter") key = "posts_letters";
       else if (type === "artworks" || type === "artwork") key = "posts_artworks";
       else if (type === "music") key = "posts_music";
+      else if (type === "candies" || type === "candy") key = "posts_candies";
       else if (type === "users" || type === "user") key = "users";
       else if (type === "pets" || type === "pet") key = "pets";
 

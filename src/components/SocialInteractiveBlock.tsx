@@ -5,7 +5,7 @@ import { User, Comment } from "../types";
 interface SocialInteractiveBlockProps {
   currentUser: User | null;
   postId: string;
-  postType: "photos" | "videos" | "music" | "letters" | "artworks";
+  postType: "photos" | "videos" | "music" | "letters" | "artworks" | "candies";
   initialLikes?: number;
   initialFavorites?: number;
   onUpdateCounts?: () => void;

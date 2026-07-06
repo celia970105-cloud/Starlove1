@@ -109,6 +109,22 @@ export interface MusicPost {
   favorited_by_me?: boolean;
 }
 
+export interface CandyPost {
+  id: string;
+  title: string;       // Candy Name (糖果名稱)
+  content: string;     // Sugar Point Analysis (糖點分析內容)
+  is_anonymous: boolean;
+  user_id: string;
+  username: string;    // Submitter
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  likes_count?: number;
+  favorites_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  favorited_by_me?: boolean;
+}
+
 export interface Comment {
   id: string;
   post_id: string;
@@ -160,6 +176,7 @@ export interface AdminPending {
   letters: LetterPost[];
   artworks: ArtworkPost[];
   music: MusicPost[];
+  candies: CandyPost[];
 }
 
 export interface AdminAllData {
@@ -168,6 +185,7 @@ export interface AdminAllData {
   letters: LetterPost[];
   artworks: ArtworkPost[];
   music: MusicPost[];
+  candies: CandyPost[];
   users: Omit<User, "password">[];
   pets: Pet[];
 }

@@ -15,8 +15,8 @@ interface AdminModuleProps {
 export default function AdminModule({ currentUser, onRefreshData }: AdminModuleProps) {
   // Tabs: 'pending' (moderation) | 'global_db' | 'site_text'
   const [activeTab, setActiveTab] = useState<"pending" | "global_db" | "site_text">("pending");
-  // Sub-category of moderation: 'all' | 'photos' | 'videos' | 'letters' | 'artworks' | 'music'
-  const [modSubTab, setModSubTab] = useState<"all" | "photos" | "videos" | "letters" | "artworks" | "music">("all");
+  // Sub-category of moderation: 'all' | 'photos' | 'videos' | 'letters' | 'artworks' | 'music' | 'candies'
+  const [modSubTab, setModSubTab] = useState<"all" | "photos" | "videos" | "letters" | "artworks" | "music" | "candies">("all");
 
   const [pendingData, setPendingData] = useState<AdminPending | null>(null);
   const [globalData, setGlobalData] = useState<AdminAllData | null>(null);
@@ -169,7 +169,8 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
       videos: "影片",
       letters: "信件",
       artworks: "畫作",
-      music: "音樂"
+      music: "音樂",
+      candies: "糖果"
     };
 
     const confirmText = `確定要一鍵【核准並公開】當前「${typeNames[modSubTab]}」分類下的所有 ${list.length} 個待審應援件嗎？這將即時發布至首頁且回饋投稿者各 50 應援星幣。`;
@@ -259,6 +260,7 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
       if (pendingData.letters) pendingData.letters.forEach(x => all.push({ ...x, _categoryKey: "letters" }));
       if (pendingData.artworks) pendingData.artworks.forEach(x => all.push({ ...x, _categoryKey: "artworks" }));
       if (pendingData.music) pendingData.music.forEach(x => all.push({ ...x, _categoryKey: "music" }));
+      if (pendingData.candies) pendingData.candies.forEach(x => all.push({ ...x, _categoryKey: "candies" }));
       
       // Sort by created_at descending
       all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -356,14 +358,15 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
           >
             {/* Moderation subcategories selector with badge counts */}
             <div className="flex flex-wrap gap-1 bg-[#FFF6F2] border border-[#FF799C]/15 p-1.5 rounded-2xl shadow-inner">
-              {(["all", "photos", "videos", "letters", "artworks", "music"] as const).map((sub) => {
+              {(["all", "photos", "videos", "letters", "artworks", "music", "candies"] as const).map((sub) => {
                 const names = { 
                   all: "全部待審", 
                   photos: "📸 相片", 
                   videos: "🎬 影片", 
                   letters: "💌 信件", 
                   artworks: "🎨 畫作", 
-                  music: "🎵 音樂" 
+                  music: "🎵 音樂",
+                  candies: "🍬 糖果"
                 };
                 
                 const count = pendingData ? (
@@ -372,7 +375,8 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                        (pendingData.videos?.length || 0) + 
                        (pendingData.letters?.length || 0) + 
                        (pendingData.artworks?.length || 0) + 
-                       (pendingData.music?.length || 0))
+                       (pendingData.music?.length || 0) +
+                       (pendingData.candies?.length || 0))
                     : (pendingData[sub]?.length || 0)
                 ) : 0;
                 
@@ -434,7 +438,8 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                     videos: "🎬 影片",
                     letters: "💌 信件",
                     artworks: "🎨 畫作",
-                    music: "🎵 音樂"
+                    music: "🎵 音樂",
+                    candies: "🍬 糖果"
                   };
                   return (
                     <div
@@ -451,8 +456,12 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                         
                         {/* Letter specific block representation */}
                         {item.content && !item.image_url && (
-                          <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-[#FF799C]/10 border border-[#FF799C]/20 text-[#FF799C] shrink-0 font-serif font-bold text-lg">
-                            信
+                          <div className={`h-12 w-12 rounded-xl flex items-center justify-center border font-serif font-bold text-lg shrink-0 ${
+                            item._categoryKey === "candies"
+                              ? "bg-pink-100 border-pink-200 text-pink-600 animate-pulse"
+                              : "bg-[#FF799C]/10 border-[#FF799C]/20 text-[#FF799C]"
+                          }`}>
+                            {item._categoryKey === "candies" ? "糖" : "信"}
                           </div>
                         )}
 
@@ -884,7 +893,9 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                   selectedItemType === "photos" ? "📸 相片" : 
                   selectedItemType === "videos" ? "🎬 影片" : 
                   selectedItemType === "letters" ? "💌 信件" : 
-                  selectedItemType === "artworks" ? "🎨 畫作" : "🎵 音樂"
+                  selectedItemType === "artworks" ? "🎨 畫作" : 
+                  selectedItemType === "music" ? "🎵 音樂" : 
+                  selectedItemType === "candies" ? "🍬 糖果" : "應援項目"
                 }</span>
               </div>
 

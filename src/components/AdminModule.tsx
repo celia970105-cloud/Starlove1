@@ -21,6 +21,8 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
   const [pendingData, setPendingData] = useState<AdminPending | null>(null);
   const [globalData, setGlobalData] = useState<AdminAllData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>("");
@@ -87,42 +89,61 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
     if (savedPetsDesc) setPetsDesc(savedPetsDesc);
   }, []);
 
-  const fetchPending = async () => {
-    setIsLoading(true);
+  const fetchAllData = async (silent = false) => {
+    const isAdmin = currentUser?.role === "admin" || currentUser?.email?.trim().toLowerCase() === "celia970105@gmail.com";
+    if (!isAdmin) return;
+
+    if (!silent) {
+      setIsLoading(true);
+    } else {
+      setIsSyncing(true);
+    }
     setError("");
+
     try {
-      const res = await fetch("/api/admin/pending");
-      if (res.ok) {
-        const data = await res.json();
-        setPendingData(data);
-      } else {
+      const [pendingRes, globalRes] = await Promise.all([
+        fetch("/api/admin/pending"),
+        fetch("/api/admin/all")
+      ]);
+
+      if (pendingRes.ok) {
+        const pData = await pendingRes.json();
+        setPendingData(pData);
+      } else if (!silent) {
         setError("無法讀取待審核資料。");
       }
-    } catch (err) {
-      setError("讀取伺服器待審資料失敗。");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const fetchGlobal = async () => {
-    try {
-      const res = await fetch("/api/admin/all");
-      if (res.ok) {
-        const data = await res.json();
-        setGlobalData(data);
+      if (globalRes.ok) {
+        const gData = await globalRes.json();
+        setGlobalData(gData);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to sync admin data:", err);
+      if (!silent) {
+        setError("讀取伺服器資料失敗。");
+      }
+    } finally {
+      setIsLoading(false);
+      setIsSyncing(false);
     }
   };
 
+  // Initial fetch on mount or tab active
   useEffect(() => {
-    if (currentUser?.role === "admin") {
-      fetchPending();
-      fetchGlobal();
-    }
+    fetchAllData(false);
   }, [currentUser, activeTab]);
+
+  // Real-time auto sync polling interval (5 seconds)
+  useEffect(() => {
+    const isAdmin = currentUser?.role === "admin" || currentUser?.email?.trim().toLowerCase() === "celia970105@gmail.com";
+    if (!isAdmin || !autoSync) return;
+
+    const interval = setInterval(() => {
+      fetchAllData(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentUser, autoSync, activeTab]);
 
   const handleAction = async (type: string, id: string, action: "approve" | "reject" | "delete") => {
     setMessage("");
@@ -145,8 +166,7 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
       if (res.ok) {
         setMessage(`成功執行 ${action === "approve" ? "核准" : action === "reject" ? "退回" : "刪除"} 作業！`);
         // Refresh feeds
-        fetchPending();
-        fetchGlobal();
+        fetchAllData(true);
         if (onRefreshData) {
           onRefreshData();
         }
@@ -195,8 +215,7 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
 
       if (allSuccess) {
         setMessage(`✨ 成功一鍵核准當前類別所有 ${list.length} 個投稿項目！`);
-        fetchPending();
-        fetchGlobal();
+        fetchAllData(true);
         if (onRefreshData) onRefreshData();
       } else {
         setError("部分投稿件處理失敗，請重新整理確認。");
@@ -284,12 +303,45 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
       </div>
 
       {/* Title */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-serif font-light text-[#FF799C] tracking-wide flex items-center gap-2">
-          <Shield className="h-6 w-6 text-[#FF799C]" />
-          星盟管理控台 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FF799C]/10 text-[#FF799C] border border-[#FF799C]/20 uppercase">ADMIN ACTIVE</span>
-        </h2>
-        <p className="text-xs text-[#6E4B55]/70 mt-1">控制、發布或剔除投稿項目，管理用戶星寵數據，調整主視覺宣告與文字。</p>
+      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#FF799C]/10 pb-4">
+        <div>
+          <h2 className="text-2xl font-serif font-light text-[#FF799C] tracking-wide flex items-center gap-2">
+            <Shield className="h-6 w-6 text-[#FF799C]" />
+            星盟管理控台 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FF799C]/10 text-[#FF799C] border border-[#FF799C]/20 uppercase">ADMIN ACTIVE</span>
+          </h2>
+          <p className="text-xs text-[#6E4B55]/70 mt-1">控制、發布或剔除投稿項目，管理用戶星寵數據，調整主視覺宣告與文字。</p>
+        </div>
+
+        {/* Real-time Sync Controls */}
+        <div className="flex flex-wrap items-center gap-2 bg-[#FFF6F2] p-1.5 rounded-2xl border border-[#FF799C]/15 self-start md:self-center">
+          <div className="flex items-center gap-1.5 px-2">
+            <span className={`h-2 w-2 rounded-full ${autoSync ? "bg-emerald-500 animate-pulse" : "bg-gray-400"}`} />
+            <span className="text-[11px] font-medium text-[#6E4B55]/80">
+              {autoSync ? "即時同步中 (5s)" : "即時同步已暫停"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setAutoSync(!autoSync)}
+            className={`px-2 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${autoSync ? "bg-[#FF799C]/10 text-[#FF799C] border border-[#FF799C]/20 hover:bg-[#FF799C]/20" : "bg-[#6E4B55]/10 text-[#6E4B55]/70 hover:bg-[#6E4B55]/20"}`}
+            title={autoSync ? "點擊暫停自動即時同步" : "點擊啟動每 5 秒自動同步"}
+          >
+            {autoSync ? "暫停自動" : "開啟自動"}
+          </button>
+
+          <div className="h-4 w-[1px] bg-[#FF799C]/20" />
+
+          <button
+            type="button"
+            onClick={() => fetchAllData(true)}
+            disabled={isSyncing || isLoading}
+            className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] text-white text-[11px] font-bold rounded-xl shadow-sm hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`} />
+            <span>立即同步</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Tab Switcher */}

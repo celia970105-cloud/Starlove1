@@ -275,6 +275,22 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
         });
       }
 
+      // Candies
+      if (adminData.candies) {
+        adminData.candies.forEach((c: any) => {
+          if (c.user_id === currentUser.id) {
+            combined.push({
+              id: c.id,
+              title: c.title || "未命名糖果",
+              type: "糖果",
+              status: c.status,
+              content: c.content,
+              timestamp: c.created_at
+            });
+          }
+        });
+      }
+
       // Snaps (與好友共同飼養寵物互相發送的照片)
       snapsData.forEach((s: any) => {
         if (s.senderId === currentUser.id) {

@@ -88,27 +88,36 @@ export async function getDbKey(key: string): Promise<any> {
     return local ? JSON.parse(local) : defaultValue;
   }
   try {
-    const { data, error } = await supabase
-      .from("starry_state")
-      .select("value")
-      .eq("key", key)
-      .maybeSingle();
-    
-    if (error) {
-      console.warn(`Supabase read failed for key ${key}, using local cache:`, error);
-      const local = localStorage.getItem(`starry_local_${key}`);
-      return local ? JSON.parse(local) : defaultValue;
+    let result: any = null;
+    if (key === "users") {
+      const { data, error } = await supabase.from("profiles").select("*");
+      if (error) throw error;
+      result = data;
+    } else if (key.startsWith("posts_")) {
+      const type = key.replace("posts_", "");
+      const { data, error } = await supabase.from("posts").select("*").eq("type", type);
+      if (error) throw error;
+      result = data;
+    } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
+      const { data, error } = await supabase.from(key).select("*");
+      if (error) throw error;
+      result = data;
+    } else {
+      const { data, error } = await supabase
+        .from("starry_state")
+        .select("value")
+        .eq("key", key)
+        .maybeSingle();
+      if (!error && data) result = data.value;
     }
-    
-    if (!data) {
-      // Seed on first access
+
+    if (result === null) {
       await setDbKey(key, defaultValue);
       return defaultValue;
     }
-    
-    // Save to local storage as hot cache
-    localStorage.setItem(`starry_local_${key}`, JSON.stringify(data.value));
-    return data.value;
+
+    localStorage.setItem(`starry_local_${key}`, JSON.stringify(result));
+    return result;
   } catch (err) {
     console.warn(`Supabase read failed for key ${key}, falling back to local storage`, err);
     const local = localStorage.getItem(`starry_local_${key}`);
@@ -121,35 +130,57 @@ export async function setDbKey(key: string, value: any): Promise<void> {
   localStorage.setItem(`starry_local_${key}`, JSON.stringify(value));
   if (!supabase) return;
   try {
-    const { error } = await supabase
-      .from("starry_state")
-      .upsert({ key, value });
-    if (error) {
-      console.warn(`Supabase upsert failed for key ${key} (trying fallback update/insert):`, error.message, error.details, error.hint, error);
-      
-      // Fallback 1: Try updating the existing key directly
-      const { error: updateError } = await supabase
+    if (key === "users") {
+      const cleanUsers = value.map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        password: u.password || "password123",
+        avatar: u.avatar || "",
+        background: u.background || "",
+        star_coins: u.star_coins || 100,
+        role: u.role || "user",
+        bio: u.bio || "",
+        is_guest: Boolean(u.is_guest),
+        solo_pet: u.solo_pet || null
+      }));
+      const { error } = await supabase.from("profiles").upsert(cleanUsers);
+      if (error) throw error;
+    } else if (key.startsWith("posts_")) {
+      const type = key.replace("posts_", "");
+      const cleanPosts = value.map((p: any) => ({
+        id: p.id,
+        user_id: p.user_id || "anonymous",
+        username: p.username || "Anonymous",
+        type: type,
+        title: p.title || null,
+        image_url: p.image_url || null,
+        video_url: p.video_url || null,
+        audio_url: p.audio_url || null,
+        content: p.content || null,
+        category: p.category || null,
+        year: p.year || null,
+        artist: p.artist || null,
+        duration: p.duration || null,
+        color_theme: p.color_theme || null,
+        is_anonymous: Boolean(p.is_anonymous),
+        status: p.status || "pending",
+        created_at: p.created_at || new Date().toISOString()
+      }));
+      const { error } = await supabase.from("posts").upsert(cleanPosts);
+      if (error) throw error;
+    } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
+      const { error } = await supabase.from(key).upsert(value);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
         .from("starry_state")
-        .update({ value })
-        .eq("key", key);
-        
-      if (updateError) {
-        console.warn(`Supabase fallback update failed for key ${key} (trying fallback insert):`, updateError.message, updateError);
-        
-        // Fallback 2: Try inserting a new row
-        const { error: insertError } = await supabase
+        .upsert({ key, value });
+      if (error) {
+        await supabase
           .from("starry_state")
-          .insert({ key, value });
-          
-        if (insertError) {
-          console.error(`Supabase fallback insert failed for key ${key}:`, insertError.message, insertError);
-          // Standard error log matching user's expectation for tracking
-          console.error(`Supabase write failed for key ${key}:`, insertError);
-        } else {
-          console.log(`Supabase fallback insert succeeded for key ${key}`);
-        }
-      } else {
-        console.log(`Supabase fallback update succeeded for key ${key}`);
+          .update({ value })
+          .eq("key", key);
       }
     }
   } catch (err) {
@@ -256,6 +287,445 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
   };
 
   try {
+    const currentUserId = (() => {
+      const saved = localStorage.getItem("starry_current_user");
+      if (saved) {
+        try { return JSON.parse(saved)?.id; } catch (e) {}
+      }
+      return null;
+    })();
+
+    // --- SOCIAL & COMMUNITY EXTENDED API ENDPOINTS ---
+
+    // GET /api/posts/feed/latest OR /api/posts/feed/hot
+    if (pathParts[0] === "posts" && pathParts[1] === "feed" && method === "GET") {
+      const feedType = pathParts[2]; // latest or hot
+      let allPosts = [];
+      if (supabase) {
+        const { data, error } = await supabase.from("posts").select("*").eq("status", "approved");
+        if (!error && data) allPosts = data;
+      } else {
+        const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+        for (const pt of pTypes) {
+          const list = await getDbKey(`posts_${pt}`);
+          allPosts.push(...list.filter((x: any) => x.status === "approved"));
+        }
+      }
+
+      // Enhance posts
+      const enhanced = await Promise.all(allPosts.map(async (p: any) => {
+        let likesCount = 0;
+        let favsCount = 0;
+        let commentsCount = 0;
+        let liked_by_me = false;
+        let favorited_by_me = false;
+
+        if (supabase) {
+          const [likesRes, favsRes, commentsRes] = await Promise.all([
+            supabase.from("post_likes").select("id", { count: "exact" }).eq("post_id", p.id),
+            supabase.from("favorites").select("id", { count: "exact" }).eq("post_id", p.id),
+            supabase.from("comments").select("id", { count: "exact" }).eq("post_id", p.id)
+          ]);
+          likesCount = likesRes.count || 0;
+          favsCount = favsRes.count || 0;
+          commentsCount = commentsRes.count || 0;
+
+          if (currentUserId) {
+            const [myLike, myFav] = await Promise.all([
+              supabase.from("post_likes").select("id").eq("post_id", p.id).eq("user_id", currentUserId).maybeSingle(),
+              supabase.from("favorites").select("id").eq("post_id", p.id).eq("user_id", currentUserId).maybeSingle()
+            ]);
+            liked_by_me = !!myLike.data;
+            favorited_by_me = !!myFav.data;
+          }
+        } else {
+          const localLikes = JSON.parse(localStorage.getItem(`starry_local_likes_${p.id}`) || "[]");
+          const localFavs = JSON.parse(localStorage.getItem(`starry_local_favs_${p.id}`) || "[]");
+          const localComments = JSON.parse(localStorage.getItem(`starry_local_comments_${p.id}`) || "[]");
+          likesCount = localLikes.length;
+          favsCount = localFavs.length;
+          commentsCount = localComments.length;
+          if (currentUserId) {
+            liked_by_me = localLikes.includes(currentUserId);
+            favorited_by_me = localFavs.includes(currentUserId);
+          }
+        }
+
+        return {
+          ...p,
+          likes_count: likesCount,
+          favorites_count: favsCount,
+          comments_count: commentsCount,
+          liked_by_me,
+          favorited_by_me
+        };
+      }));
+
+      if (feedType === "hot") {
+        enhanced.sort((a, b) => {
+          const scoreA = (a.likes_count || 0) + (a.favorites_count || 0) * 2 + (a.comments_count || 0) * 3;
+          const scoreB = (b.likes_count || 0) + (b.favorites_count || 0) * 2 + (b.comments_count || 0) * 3;
+          return scoreB - scoreA;
+        });
+      } else {
+        enhanced.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      }
+
+      return jsonResponse(enhanced);
+    }
+
+    // POST /api/social/like
+    if (pathParts[0] === "social" && pathParts[1] === "like" && method === "POST") {
+      const { postId } = body || {};
+      if (!currentUserId || !postId) {
+        return jsonResponse({ error: "Missing parameter or unauthorized" }, 401);
+      }
+      let liked = false;
+      let count = 0;
+
+      if (supabase) {
+        const likeId = `like_${currentUserId}_${postId}`;
+        const { data: existing } = await supabase.from("post_likes").select("id").eq("id", likeId).maybeSingle();
+        if (existing) {
+          await supabase.from("post_likes").delete().eq("id", likeId);
+        } else {
+          await supabase.from("post_likes").insert({ id: likeId, post_id: postId, user_id: currentUserId });
+          liked = true;
+
+          // Notify author
+          const { data: post } = await supabase.from("posts").select("user_id, title").eq("id", postId).maybeSingle();
+          if (post && post.user_id !== currentUserId) {
+            await supabase.from("notifications").insert({
+              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              user_id: post.user_id,
+              sender_id: currentUserId,
+              type: "like",
+              post_id: postId,
+              content: `點讚了你的投稿「${post.title || "無標題"}」`
+            });
+          }
+        }
+        const { count: c } = await supabase.from("post_likes").select("id", { count: "exact" }).eq("post_id", postId);
+        count = c || 0;
+      } else {
+        const localLikes = JSON.parse(localStorage.getItem(`starry_local_likes_${postId}`) || "[]");
+        const idx = localLikes.indexOf(currentUserId);
+        if (idx !== -1) {
+          localLikes.splice(idx, 1);
+        } else {
+          localLikes.push(currentUserId);
+          liked = true;
+        }
+        localStorage.setItem(`starry_local_likes_${postId}`, JSON.stringify(localLikes));
+        count = localLikes.length;
+      }
+
+      return jsonResponse({ success: true, liked, likes_count: count });
+    }
+
+    // POST /api/social/favorite
+    if (pathParts[0] === "social" && pathParts[1] === "favorite" && method === "POST") {
+      const { postId } = body || {};
+      if (!currentUserId || !postId) {
+        return jsonResponse({ error: "Missing parameter or unauthorized" }, 401);
+      }
+      let favorited = false;
+      let count = 0;
+
+      if (supabase) {
+        const favId = `fav_${currentUserId}_${postId}`;
+        const { data: existing } = await supabase.from("favorites").select("id").eq("id", favId).maybeSingle();
+        if (existing) {
+          await supabase.from("favorites").delete().eq("id", favId);
+        } else {
+          await supabase.from("favorites").insert({ id: favId, post_id: postId, user_id: currentUserId });
+          favorited = true;
+
+          // Notify author
+          const { data: post } = await supabase.from("posts").select("user_id, title").eq("id", postId).maybeSingle();
+          if (post && post.user_id !== currentUserId) {
+            await supabase.from("notifications").insert({
+              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              user_id: post.user_id,
+              sender_id: currentUserId,
+              type: "favorite",
+              post_id: postId,
+              content: `收藏了你的投稿「${post.title || "無標題"}」`
+            });
+          }
+        }
+        const { count: c } = await supabase.from("favorites").select("id", { count: "exact" }).eq("post_id", postId);
+        count = c || 0;
+      } else {
+        const localFavs = JSON.parse(localStorage.getItem(`starry_local_favs_${postId}`) || "[]");
+        const idx = localFavs.indexOf(currentUserId);
+        if (idx !== -1) {
+          localFavs.splice(idx, 1);
+        } else {
+          localFavs.push(currentUserId);
+          favorited = true;
+        }
+        localStorage.setItem(`starry_local_favs_${postId}`, JSON.stringify(localFavs));
+        count = localFavs.length;
+      }
+
+      return jsonResponse({ success: true, favorited, favorites_count: count });
+    }
+
+    // GET /api/social/comments/:postId
+    if (pathParts[0] === "social" && pathParts[1] === "comments" && method === "GET") {
+      const postId = pathParts[2];
+      if (supabase) {
+        const { data: comments, error } = await supabase
+          .from("comments")
+          .select("*, profiles(username, avatar)")
+          .eq("post_id", postId)
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        const mapped = (comments || []).map((c: any) => ({
+          id: c.id,
+          post_id: c.post_id,
+          user_id: c.user_id,
+          content: c.content,
+          created_at: c.created_at,
+          username: c.profiles?.username || "未知用戶",
+          avatar: c.profiles?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown"
+        }));
+        return jsonResponse(mapped);
+      } else {
+        const localComments = JSON.parse(localStorage.getItem(`starry_local_comments_${postId}`) || "[]");
+        return jsonResponse(localComments);
+      }
+    }
+
+    // POST /api/social/comment
+    if (pathParts[0] === "social" && pathParts[1] === "comment" && method === "POST") {
+      const { postId, content } = body || {};
+      if (!currentUserId || !postId || !content) {
+        return jsonResponse({ error: "Missing parameters or unauthorized" }, 400);
+      }
+
+      if (supabase) {
+        const commentId = `comment_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const { error } = await supabase.from("comments").insert({
+          id: commentId,
+          post_id: postId,
+          user_id: currentUserId,
+          content: content
+        });
+        if (error) throw error;
+
+        // Notify author
+        const { data: post } = await supabase.from("posts").select("user_id, title").eq("id", postId).maybeSingle();
+        if (post && post.user_id !== currentUserId) {
+          await supabase.from("notifications").insert({
+            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            user_id: post.user_id,
+            sender_id: currentUserId,
+            type: "comment",
+            post_id: postId,
+            content: `在你的投稿「${post.title || "無標題"}」留下了留言：「${content}」`
+          });
+        }
+
+        // Fetch the newly created comment with profile
+        const { data: newComment } = await supabase
+          .from("comments")
+          .select("*, profiles(username, avatar)")
+          .eq("id", commentId)
+          .single();
+
+        return jsonResponse({
+          success: true,
+          comment: {
+            id: newComment.id,
+            post_id: newComment.post_id,
+            user_id: newComment.user_id,
+            content: newComment.content,
+            created_at: newComment.created_at,
+            username: newComment.profiles?.username || "未知用戶",
+            avatar: newComment.profiles?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown"
+          }
+        });
+      } else {
+        const localComments = JSON.parse(localStorage.getItem(`starry_local_comments_${postId}`) || "[]");
+        const users = await getDbKey("users");
+        const currentUser = users.find((u: any) => u.id === currentUserId);
+        const newC = {
+          id: `comment_${Date.now()}`,
+          post_id: postId,
+          user_id: currentUserId,
+          username: currentUser?.username || "Guest",
+          avatar: currentUser?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Guest",
+          content,
+          created_at: new Date().toISOString()
+        };
+        localComments.push(newC);
+        localStorage.setItem(`starry_local_comments_${postId}`, JSON.stringify(localComments));
+        return jsonResponse({ success: true, comment: newC });
+      }
+    }
+
+    // DELETE /api/social/comment/:commentId
+    if (pathParts[0] === "social" && pathParts[1] === "comment" && method === "DELETE") {
+      const commentId = pathParts[2];
+      if (!currentUserId || !commentId) {
+        return jsonResponse({ error: "Unauthorized" }, 401);
+      }
+
+      if (supabase) {
+        const { data: comment } = await supabase.from("comments").select("user_id").eq("id", commentId).maybeSingle();
+        const { data: userProfile } = await supabase.from("profiles").select("role").eq("id", currentUserId).maybeSingle();
+        const isAdmin = userProfile?.role === "admin";
+
+        if (comment && (comment.user_id === currentUserId || isAdmin)) {
+          const { error } = await supabase.from("comments").delete().eq("id", commentId);
+          if (error) throw error;
+          return jsonResponse({ success: true });
+        } else {
+          return jsonResponse({ error: "Forbidden" }, 403);
+        }
+      } else {
+        return jsonResponse({ success: true });
+      }
+    }
+
+    // GET /api/social/notifications/:userId
+    if (pathParts[0] === "social" && pathParts[1] === "notifications" && method === "GET") {
+      const userId = pathParts[2];
+      if (supabase) {
+        const { data: notifications, error } = await supabase
+          .from("notifications")
+          .select("*, profiles!notifications_sender_id_fkey(username, avatar), posts(title, type)")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+
+        const mapped = (notifications || []).map((n: any) => ({
+          id: n.id,
+          user_id: n.user_id,
+          sender_id: n.sender_id,
+          sender_name: n.profiles?.username || "未知用戶",
+          sender_avatar: n.profiles?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown",
+          type: n.type,
+          post_id: n.post_id,
+          post_title: n.posts?.title || "無標題",
+          post_type: n.posts?.type || "unknown",
+          content: n.content,
+          is_read: n.is_read,
+          created_at: n.created_at
+        }));
+        return jsonResponse(mapped);
+      } else {
+        return jsonResponse([]);
+      }
+    }
+
+    // POST /api/social/notifications/read
+    if (pathParts[0] === "social" && pathParts[1] === "notifications" && pathParts[2] === "read" && method === "POST") {
+      const { userId } = body || {};
+      if (supabase) {
+        const { error } = await supabase
+          .from("notifications")
+          .update({ is_read: true })
+          .eq("user_id", userId);
+        if (error) throw error;
+        return jsonResponse({ success: true });
+      } else {
+        return jsonResponse({ success: true });
+      }
+    }
+
+    // GET /api/social/favorites/:userId
+    if (pathParts[0] === "social" && pathParts[1] === "favorites" && method === "GET") {
+      const userId = pathParts[2];
+      if (supabase) {
+        const { data: favs, error } = await supabase
+          .from("favorites")
+          .select("*, posts(*)")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+
+        const posts = (favs || []).map((f: any) => f.posts).filter(Boolean);
+
+        const enhancedPosts = await Promise.all(posts.map(async (p: any) => {
+          const [likesRes, favsRes, commentsRes] = await Promise.all([
+            supabase.from("post_likes").select("id", { count: "exact" }).eq("post_id", p.id),
+            supabase.from("favorites").select("id", { count: "exact" }).eq("post_id", p.id),
+            supabase.from("comments").select("id", { count: "exact" }).eq("post_id", p.id)
+          ]);
+
+          let liked_by_me = false;
+          let favorited_by_me = false;
+          if (currentUserId) {
+            const [myLike, myFav] = await Promise.all([
+              supabase.from("post_likes").select("id").eq("post_id", p.id).eq("user_id", currentUserId).maybeSingle(),
+              supabase.from("favorites").select("id").eq("post_id", p.id).eq("user_id", currentUserId).maybeSingle()
+            ]);
+            liked_by_me = !!myLike.data;
+            favorited_by_me = !!myFav.data;
+          }
+
+          return {
+            ...p,
+            likes_count: likesRes.count || 0,
+            favorites_count: favsRes.count || 0,
+            comments_count: commentsRes.count || 0,
+            liked_by_me,
+            favorited_by_me
+          };
+        }));
+
+        return jsonResponse(enhancedPosts);
+      } else {
+        return jsonResponse([]);
+      }
+    }
+
+    // GET /api/social/profile-stats/:userId
+    if (pathParts[0] === "social" && pathParts[1] === "profile-stats" && method === "GET") {
+      const userId = pathParts[2];
+      if (supabase) {
+        const { count: postsCount } = await supabase
+          .from("posts")
+          .select("id", { count: "exact" })
+          .eq("user_id", userId)
+          .eq("status", "approved");
+
+        const { data: userPosts } = await supabase
+          .from("posts")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("status", "approved");
+
+        let totalLikes = 0;
+        let totalFavs = 0;
+
+        if (userPosts && userPosts.length > 0) {
+          const postIds = userPosts.map((p: any) => p.id);
+          const [likesRes, favsRes] = await Promise.all([
+            supabase.from("post_likes").select("id", { count: "exact" }).in("post_id", postIds),
+            supabase.from("favorites").select("id", { count: "exact" }).in("post_id", postIds)
+          ]);
+          totalLikes = likesRes.count || 0;
+          totalFavs = favsRes.count || 0;
+        }
+
+        return jsonResponse({
+          posts_count: postsCount || 0,
+          likes_received_count: totalLikes,
+          favorites_received_count: totalFavs
+        });
+      } else {
+        return jsonResponse({
+          posts_count: 0,
+          likes_received_count: 0,
+          favorites_received_count: 0
+        });
+      }
+    }
+
     // 1. GET /api/db
     if (pathParts[0] === "db" && method === "GET") {
       const allData: any = {};
@@ -415,7 +885,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
     // 7. POST /api/users/update
     if (pathParts[0] === "users" && pathParts[1] === "update" && method === "POST") {
-      const { userId, username, avatar, background } = body || {};
+      const { userId, username, avatar, background, bio } = body || {};
       const users = await getDbKey("users");
       const userIdx = users.findIndex((u: any) => u.id === userId);
       if (userIdx === -1) {
@@ -434,6 +904,9 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       }
       if (background) {
         users[userIdx].background = await uploadBase64ToStorage(background);
+      }
+      if (bio !== undefined) {
+        users[userIdx].bio = bio;
       }
 
       await setDbKey("users", users);

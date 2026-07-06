@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Filter, Eye, Camera, X, Check, Calendar, Tag, AlertCircle, RefreshCw } from "lucide-react";
 import { PhotoPost, User } from "../types";
+import SocialInteractiveBlock from "./SocialInteractiveBlock";
 
 interface GalleryModuleProps {
   currentUser: User | null;
@@ -318,31 +319,45 @@ export default function GalleryModule({ currentUser, onRefreshData }: GalleryMod
                 </div>
 
                 {/* Metadata */}
-                <div className="md:col-span-4 p-4 text-left space-y-4">
-                  <div>
-                    <div className="flex gap-2 mb-2">
-                      <span className="text-xs font-mono bg-[#FF799C]/10 border border-[#FF799C]/20 text-[#FF799C] px-2.5 py-0.5 rounded-full">
-                        {categoryLabels[selectedPhoto.category] || selectedPhoto.category}
-                      </span>
-                      <span className="text-xs font-mono bg-[#FFCCDD]/20 text-[#6E4B55] px-2.5 py-0.5 rounded-full">
-                        {selectedPhoto.year}
-                      </span>
+                <div className="md:col-span-4 p-4 text-left space-y-4 flex flex-col h-full justify-between">
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex gap-2 mb-2">
+                        <span className="text-xs font-mono bg-[#FF799C]/10 border border-[#FF799C]/20 text-[#FF799C] px-2.5 py-0.5 rounded-full">
+                          {categoryLabels[selectedPhoto.category] || selectedPhoto.category}
+                        </span>
+                        <span className="text-xs font-mono bg-[#FFCCDD]/20 text-[#6E4B55] px-2.5 py-0.5 rounded-full">
+                          {selectedPhoto.year}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-serif font-light text-[#FF799C] tracking-wide leading-snug">
+                        {selectedPhoto.title}
+                      </h3>
                     </div>
-                    <h3 className="text-xl font-serif font-light text-[#FF799C] tracking-wide leading-snug">
-                      {selectedPhoto.title}
-                    </h3>
+
+                    <div className="border-t border-[#FF799C]/15 pt-3 space-y-1">
+                      <p className="text-xs text-[#6E4B55]/70">
+                        投稿人：<span className="text-[#6E4B55] font-semibold">@{selectedPhoto.username}</span>
+                      </p>
+                      <p className="text-xs text-[#6E4B55]/70">
+                        發布日期：<span className="text-[#6E4B55]">{new Date(selectedPhoto.created_at).toLocaleDateString()}</span>
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="border-t border-[#FF799C]/15 pt-4 space-y-2">
-                    <p className="text-xs text-[#6E4B55]/70">
-                      投稿人：<span className="text-[#6E4B55] font-semibold">@{selectedPhoto.username}</span>
-                    </p>
-                    <p className="text-xs text-[#6E4B55]/70">
-                      發布日期：<span className="text-[#6E4B55]">{new Date(selectedPhoto.created_at).toLocaleDateString()}</span>
-                    </p>
+                  {/* Fully integrated live social block */}
+                  <div className="border-t border-[#FF799C]/15 pt-3">
+                    <SocialInteractiveBlock
+                      currentUser={currentUser}
+                      postId={selectedPhoto.id}
+                      postType="photos"
+                      initialLikes={selectedPhoto.likes_count ?? 0}
+                      initialFavorites={selectedPhoto.favorites_count ?? 0}
+                      onUpdateCounts={fetchPhotos}
+                    />
                   </div>
 
-                  <div className="border-t border-[#FF799C]/15 pt-4 text-[10px] font-mono text-[#6E4B55]/40 leading-relaxed uppercase">
+                  <div className="border-t border-[#FF799C]/15 pt-3 text-[10px] font-mono text-[#6E4B55]/40 leading-relaxed uppercase">
                     ALL FOR JIYU • ZACK • JEREMY • AMSS
                   </div>
                 </div>

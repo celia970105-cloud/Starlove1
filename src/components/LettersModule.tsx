@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, Eye, X, Mail, CheckCircle, AlertCircle, Heart, Star, Sparkles } from "lucide-react";
 import { LetterPost, User } from "../types";
+import SocialInteractiveBlock from "./SocialInteractiveBlock";
 
 interface LettersModuleProps {
   currentUser: User | null;
@@ -323,7 +324,7 @@ export default function LettersModule({ currentUser, onRefreshData }: LettersMod
               </div>
 
               {/* Envelope paper content */}
-              <div className="bg-white/90 backdrop-blur-md border border-[#FF799C]/20 p-6 rounded-2xl min-h-[160px] flex flex-col justify-between relative shadow-inner text-[#6E4B55]">
+              <div className="bg-white/90 backdrop-blur-md border border-[#FF799C]/20 p-6 rounded-2xl min-h-[160px] flex flex-col justify-between relative shadow-inner text-[#6E4B55] mb-4">
                 <p className="text-[#6E4B55] text-sm font-sans leading-relaxed whitespace-pre-wrap font-light">
                   {selectedLetter.content}
                 </p>
@@ -336,6 +337,18 @@ export default function LettersModule({ currentUser, onRefreshData }: LettersMod
                     — {selectedLetter.is_anonymous ? "匿名的星願支持者" : selectedLetter.author_name}
                   </span>
                 </div>
+              </div>
+
+              {/* Fully integrated live social block */}
+              <div className="bg-white/90 backdrop-blur-md border border-[#FF799C]/20 p-4 rounded-2xl">
+                <SocialInteractiveBlock
+                  currentUser={currentUser}
+                  postId={selectedLetter.id}
+                  postType="letters"
+                  initialLikes={selectedLetter.likes_count ?? 0}
+                  initialFavorites={selectedLetter.favorites_count ?? 0}
+                  onUpdateCounts={fetchLetters}
+                />
               </div>
 
               <div className="mt-6 flex justify-between items-center text-[10px] font-mono text-[#6E4B55]/40 uppercase tracking-widest">

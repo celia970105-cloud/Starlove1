@@ -7,6 +7,8 @@ export interface User {
   background: string;
   star_coins?: number;
   is_guest?: boolean;
+  bio?: string;
+  created_at?: string;
   solo_pet?: {
     name: string;
     fullness: number;
@@ -28,6 +30,11 @@ export interface PhotoPost {
   username: string;
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  likes_count?: number;
+  favorites_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  favorited_by_me?: boolean;
 }
 
 export interface VideoPost {
@@ -39,6 +46,11 @@ export interface VideoPost {
   username: string;
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  likes_count?: number;
+  favorites_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  favorited_by_me?: boolean;
 }
 
 export interface LetterPost {
@@ -50,6 +62,11 @@ export interface LetterPost {
   user_id: string;
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  likes_count?: number;
+  favorites_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  favorited_by_me?: boolean;
 }
 
 export interface ArtworkPost {
@@ -62,6 +79,11 @@ export interface ArtworkPost {
   username: string;
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  likes_count?: number;
+  favorites_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  favorited_by_me?: boolean;
 }
 
 export interface MusicPost {
@@ -74,6 +96,36 @@ export interface MusicPost {
   user_id: string;
   username: string;
   status: "pending" | "approved" | "rejected";
+  created_at: string;
+  likes_count?: number;
+  favorites_count?: number;
+  comments_count?: number;
+  liked_by_me?: boolean;
+  favorited_by_me?: boolean;
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  username: string;
+  avatar: string;
+  content: string;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  sender_id: string;
+  sender_name?: string;
+  sender_avatar?: string;
+  type: "like" | "favorite" | "comment" | "announcement";
+  post_id?: string;
+  post_title?: string;
+  post_type?: string;
+  content?: string;
+  is_read: boolean;
   created_at: string;
 }
 

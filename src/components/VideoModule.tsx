@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Video, Play, Pause, Plus, AlertCircle, Film, Sparkles, Check, Flame, Clock } from "lucide-react";
 import { VideoPost, User } from "../types";
+import SocialInteractiveBlock from "./SocialInteractiveBlock";
 
 interface VideoModuleProps {
   currentUser: User | null;
@@ -220,22 +221,36 @@ export default function VideoModule({ currentUser, onRefreshData }: VideoModuleP
 
           {/* Active video metadata */}
           {activeVideo && (
-            <div className="bg-white/85 backdrop-blur-md p-5 rounded-2xl border border-[#FF799C]/20 text-left text-[#6E4B55]">
-              <div className="flex gap-2 items-center mb-2">
-                <span className="text-xs font-mono bg-[#FF799C]/10 text-[#FF799C] px-2.5 py-0.5 rounded-full border border-[#FF799C]/20">
-                  {activeVideo.category}
-                </span>
-                <span className="text-xs font-mono text-[#6E4B55]/50 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {new Date(activeVideo.created_at).toLocaleDateString()}
-                </span>
+            <div className="bg-white/85 backdrop-blur-md p-5 rounded-2xl border border-[#FF799C]/20 text-left text-[#6E4B55] space-y-4">
+              <div>
+                <div className="flex gap-2 items-center mb-2">
+                  <span className="text-xs font-mono bg-[#FF799C]/10 text-[#FF799C] px-2.5 py-0.5 rounded-full border border-[#FF799C]/20">
+                    {activeVideo.category}
+                  </span>
+                  <span className="text-xs font-mono text-[#6E4B55]/50 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {new Date(activeVideo.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <h3 className="text-xl font-serif font-light text-[#FF799C] tracking-wide">
+                  {activeVideo.title}
+                </h3>
+                <p className="text-xs text-[#6E4B55]/80 mt-1">
+                  由星願主應援者 <span className="text-[#6E4B55] font-semibold">@{activeVideo.username}</span> 溫馨分享
+                </p>
               </div>
-              <h3 className="text-xl font-serif font-light text-[#FF799C] tracking-wide">
-                {activeVideo.title}
-              </h3>
-              <p className="text-xs text-[#6E4B55]/80 mt-2">
-                由星願主應援者 <span className="text-[#6E4B55] font-semibold">@{activeVideo.username}</span> 溫馨分享
-              </p>
+
+              {/* Live social interact block */}
+              <div className="border-t border-[#FF799C]/15 pt-4">
+                <SocialInteractiveBlock
+                  currentUser={currentUser}
+                  postId={activeVideo.id}
+                  postType="videos"
+                  initialLikes={activeVideo.likes_count ?? 0}
+                  initialFavorites={activeVideo.favorites_count ?? 0}
+                  onUpdateCounts={fetchVideos}
+                />
+              </div>
             </div>
           )}
         </div>

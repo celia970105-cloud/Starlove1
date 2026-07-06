@@ -35,8 +35,15 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
   const [newUsername, setNewUsername] = useState("");
   const [newAvatar, setNewAvatar] = useState("");
   const [newBg, setNewBg] = useState("");
+  const [bio, setBio] = useState("");
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState("");
+
+  // Social States
+  const [socialSubTab, setSocialSubTab] = useState<"submissions" | "favorites" | "notifications">("submissions");
+  const [socialStats, setSocialStats] = useState({ posts_count: 0, likes_received_count: 0, favorites_received_count: 0 });
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [favoritesList, setFavoritesList] = useState<any[]>([]);
 
   // Guest Account Upgrade States
   const [upgradeEmail, setUpgradeEmail] = useState("");
@@ -77,12 +84,69 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
       setNewUsername(currentUser.username);
       setNewAvatar(currentUser.avatar);
       setNewBg(currentUser.background);
+      setBio(currentUser.bio || "");
       setUpgradeUsername(currentUser.username);
       fetchUserSubmissions();
+      fetchProfileStats();
+      fetchNotifications();
+      fetchFavorites();
     } else {
       setActiveTab("login");
     }
   }, [currentUser]);
+
+  const fetchProfileStats = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/social/profile-stats/${currentUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSocialStats(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/social/notifications/${currentUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchFavorites = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/social/favorites/${currentUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFavoritesList(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMarkNotificationsRead = async () => {
+    if (!currentUser) return;
+    try {
+      await fetch("/api/social/notifications/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id })
+      });
+      fetchNotifications();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Load saved credentials strictly only once on component mount
   useEffect(() => {
@@ -360,7 +424,8 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
           userId: currentUser.id,
           username: newUsername,
           avatar: newAvatar,
-          background: newBg
+          background: newBg,
+          bio: bio
         })
       });
 
@@ -527,6 +592,17 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
+                  />
+                </div>
+
+                {/* Biography */}
+                <div>
+                  <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">個人簡介 / 應援寄語 (Biography)</label>
+                  <textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="在這裡寫下你的應援宣言，讓大家認識你吧 🌸"
+                    className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2 rounded-xl transition-all h-20 resize-none p-3"
                   />
                 </div>
 
@@ -802,6 +878,22 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                 </button>
               </div>
 
+              {/* Profile Statistics Bento Row */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center">
+                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">🎨 應援作品</span>
+                  <span className="text-lg font-bold text-[#FF799C] font-mono">{socialStats.posts_count}</span>
+                </div>
+                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center">
+                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">❤️ 累計點讚</span>
+                  <span className="text-lg font-bold text-[#FF799C] font-mono">{socialStats.likes_received_count}</span>
+                </div>
+                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center">
+                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">⭐ 累計收藏</span>
+                  <span className="text-lg font-bold text-[#FF799C] font-mono">{socialStats.favorites_received_count}</span>
+                </div>
+              </div>
+
               {/* Cover Preview header */}
               <div className="relative h-28 rounded-2xl overflow-hidden border border-[#FF799C]/20 bg-[#FFF6F2]">
                 {newBg ? (
@@ -818,9 +910,9 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                       <div className="w-full h-full bg-[#FF799C]/10" />
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <h4 className="text-[#6E4B55] font-serif font-bold text-base flex items-center gap-1">
-                      <span>{currentUser.username}</span>
+                      <span className="truncate max-w-[120px]">{currentUser.username}</span>
                       {currentUser.role === "admin" && (
                         <span className="bg-[#FF799C]/20 border border-[#FF799C]/40 text-[#FF799C] text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5">
                           <Shield className="h-2 w-2" />
@@ -828,95 +920,223 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                         </span>
                       )}
                     </h4>
-                    <p className="text-[#6E4B55]/60 text-[10px] font-mono mt-0.5">{currentUser.email}</p>
+                    <p className="text-[#6E4B55]/60 text-[10px] font-mono mt-0.5 truncate">{currentUser.email}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Submissions queue list / Personal Database */}
-              <div className="bg-[#FFF6F2]/50 border border-[#FF799C]/10 p-4 rounded-2xl space-y-3 shadow-inner">
-                <div className="flex justify-between items-center pb-1">
-                  <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF799C] flex items-center gap-1 uppercase">
-                    <FolderHeart className="h-3.5 w-3.5 animate-pulse text-[#FF799C]" />
-                    我的個人應援數據庫 ({filteredSubmissions.length})
-                  </span>
+              {/* Biography display in profile */}
+              {currentUser.bio && (
+                <div className="p-3.5 bg-[#FFF6F2]/40 border-l-2 border-[#FF799C]/50 rounded-r-xl text-xs text-[#6E4B55]/80 italic">
+                  💬 「{currentUser.bio}」
+                </div>
+              )}
+
+              {/* Interactive Multi-Tab Social Area */}
+              <div className="bg-[#FFF6F2]/50 border border-[#FF799C]/10 p-4 rounded-3xl space-y-3.5 shadow-inner">
+                {/* Section tabs */}
+                <div className="flex border-b border-[#FF799C]/15 pb-2 mb-2 gap-3 justify-around text-xs font-medium">
                   <button
-                    type="button"
-                    onClick={fetchUserSubmissions}
-                    disabled={isSubmissionsLoading}
-                    className="p-1 rounded-lg hover:bg-[#FF799C]/10 text-[#6E4B55]/70 hover:text-[#FF799C] transition-colors disabled:opacity-50 cursor-pointer"
-                    title="重新整理數據"
+                    onClick={() => setSocialSubTab("submissions")}
+                    className={`pb-1 px-1 relative transition-all cursor-pointer ${socialSubTab === "submissions" ? "text-[#FF799C] font-bold" : "text-[#6E4B55]/70 hover:text-[#FF799C]"}`}
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isSubmissionsLoading ? "animate-spin" : ""}`} />
+                    🌸 我的作品
+                    {socialSubTab === "submissions" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF799C] rounded-full" />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSocialSubTab("favorites");
+                      fetchFavorites();
+                    }}
+                    className={`pb-1 px-1 relative transition-all cursor-pointer ${socialSubTab === "favorites" ? "text-[#FF799C] font-bold" : "text-[#6E4B55]/70 hover:text-[#FF799C]"}`}
+                  >
+                    ⭐ 收藏應援
+                    {socialSubTab === "favorites" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF799C] rounded-full" />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSocialSubTab("notifications");
+                      handleMarkNotificationsRead();
+                    }}
+                    className={`pb-1 px-1 relative transition-all cursor-pointer ${socialSubTab === "notifications" ? "text-[#FF799C] font-bold" : "text-[#6E4B55]/70 hover:text-[#FF799C]"}`}
+                  >
+                    🔔 星光通知
+                    {notifications.some(n => !n.is_read) && (
+                      <span className="absolute top-0 right-[-6px] h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                    )}
+                    {notifications.some(n => !n.is_read) && (
+                      <span className="absolute top-0 right-[-6px] h-2 w-2 rounded-full bg-red-500" />
+                    )}
+                    {socialSubTab === "notifications" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF799C] rounded-full" />}
                   </button>
                 </div>
 
-                {/* Database filter tabs */}
-                <div className="flex gap-1 overflow-x-auto pb-1.5 scrollbar-none">
-                  {["all", "相片", "影片", "音樂", "信件", "畫作", "寵物相片"].map((type) => {
-                    const count = type === "all" 
-                      ? userSubmissions.length 
-                      : userSubmissions.filter(s => s.type === type).length;
-                    return (
+                {socialSubTab === "submissions" && (
+                  <>
+                    <div className="flex justify-between items-center pb-1">
+                      <span className="text-[10px] font-mono font-bold tracking-widest text-[#FF799C] uppercase">
+                        應援數據庫 ({filteredSubmissions.length})
+                      </span>
                       <button
-                        key={type}
                         type="button"
-                        onClick={() => setSubmissionFilter(type)}
-                        className={`text-[9px] font-semibold px-2 py-1 rounded-lg transition-all shrink-0 cursor-pointer ${submissionFilter === type ? "bg-[#FF799C] text-white shadow-sm shadow-[#FF799C]/10" : "bg-white/70 text-[#6E4B55]/70 hover:bg-[#FFF6F2] hover:text-[#FF799C]"}`}
+                        onClick={fetchUserSubmissions}
+                        disabled={isSubmissionsLoading}
+                        className="p-1 rounded-lg hover:bg-[#FF799C]/10 text-[#6E4B55]/70 hover:text-[#FF799C] transition-colors disabled:opacity-50 cursor-pointer"
+                        title="重新整理數據"
                       >
-                        {type === "all" ? "全部" : type}({count})
+                        <RefreshCw className={`h-3.5 w-3.5 ${isSubmissionsLoading ? "animate-spin" : ""}`} />
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
 
-                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                  {isSubmissionsLoading ? (
-                    <div className="text-center py-6">
-                      <RefreshCw className="h-4 w-4 text-[#FF799C] animate-spin mx-auto mb-1.5" />
-                      <p className="text-[10px] text-[#6E4B55]/40 font-mono">載入星光資料庫中...</p>
+                    {/* Database filter tabs */}
+                    <div className="flex gap-1 overflow-x-auto pb-1.5 scrollbar-none">
+                      {["all", "相片", "影片", "音樂", "信件", "畫作", "寵物相片"].map((type) => {
+                        const count = type === "all" 
+                          ? userSubmissions.length 
+                          : userSubmissions.filter(s => s.type === type).length;
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setSubmissionFilter(type)}
+                            className={`text-[9px] font-semibold px-2 py-1 rounded-lg transition-all shrink-0 cursor-pointer ${submissionFilter === type ? "bg-[#FF799C] text-white shadow-sm" : "bg-white/70 text-[#6E4B55]/70 hover:bg-[#FFF6F2]"}`}
+                          >
+                            {type === "all" ? "全部" : type}({count})
+                          </button>
+                        );
+                      })}
                     </div>
-                  ) : filteredSubmissions.length === 0 ? (
-                    <div className="text-center py-8 text-xs font-serif text-[#6E4B55]/50 leading-relaxed bg-white/40 rounded-xl border border-dashed border-[#FF799C]/10">
-                      🌸 該分類目前尚無項目。<br />
-                      點擊上方對應板塊，馬上上傳你的作品吧！
+
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {isSubmissionsLoading ? (
+                        <div className="text-center py-6">
+                          <RefreshCw className="h-4 w-4 text-[#FF799C] animate-spin mx-auto mb-1.5" />
+                          <p className="text-[10px] text-[#6E4B55]/40 font-mono">載入星光資料庫中...</p>
+                        </div>
+                      ) : filteredSubmissions.length === 0 ? (
+                        <div className="text-center py-8 text-xs font-serif text-[#6E4B55]/50 leading-relaxed bg-white/40 rounded-xl border border-dashed border-[#FF799C]/10">
+                          🌸 該分類目前尚無項目。<br />
+                          點擊對應板塊，馬上上傳你的作品吧！
+                        </div>
+                      ) : (
+                        filteredSubmissions.map((sub) => (
+                          <button
+                            key={sub.id}
+                            type="button"
+                            onClick={() => setSelectedSub(sub)}
+                            className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/80 hover:bg-white border border-[#FF799C]/10 text-xs text-[#6E4B55]/90 hover:border-[#FF799C]/30 hover:shadow-sm transition-all text-left active:scale-[0.99] cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {sub.imageUrl ? (
+                                <div className="h-7 w-7 rounded-md overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
+                                  <img src={sub.imageUrl} alt={sub.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                </div>
+                              ) : (
+                                <div className="h-7 w-7 rounded-md bg-[#FF799C]/5 border border-[#FF799C]/10 flex items-center justify-center shrink-0">
+                                  <FileText className="h-3.5 w-3.5 text-[#FF799C]/60" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <span className="text-[8px] font-mono bg-[#FF799C]/10 text-[#FF799C] px-1 py-0.5 rounded mr-1.5 font-bold">
+                                  {sub.type}
+                                </span>
+                                <span className="font-sans font-medium text-[#6E4B55] truncate inline-block align-middle max-w-[120px]">{sub.title}</span>
+                              </div>
+                            </div>
+
+                            {/* Status tag */}
+                            <div className="flex items-center gap-1 shrink-0 ml-1">
+                              <span className={`text-[8px] font-mono font-bold px-2 py-0.5 rounded-full ${sub.status === "approved" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : sub.status === "rejected" ? "bg-red-500/10 text-red-600 border border-red-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20 animate-pulse"}`}>
+                                {sub.status === "approved" ? "已公開" : sub.status === "rejected" ? "退回" : "審核中"}
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      )}
                     </div>
-                  ) : (
-                    filteredSubmissions.map((sub) => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => setSelectedSub(sub)}
-                        className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/80 hover:bg-white border border-[#FF799C]/10 text-xs text-[#6E4B55]/90 hover:border-[#FF799C]/30 hover:shadow-sm transition-all text-left active:scale-[0.99] cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          {sub.imageUrl ? (
-                            <div className="h-7 w-7 rounded-md overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
-                              <img src={sub.imageUrl} alt={sub.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  </>
+                )}
+
+                {socialSubTab === "favorites" && (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {favoritesList.length === 0 ? (
+                      <div className="text-center py-8 text-xs font-serif text-[#6E4B55]/50 leading-relaxed bg-white/40 rounded-xl border border-dashed border-[#FF799C]/10">
+                        ⭐ 暫無收藏的應援作品。<br />
+                        瀏覽各專區，點擊星星即可收藏作品！
+                      </div>
+                    ) : (
+                      favoritesList.map((sub: any) => (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => {
+                            const typeMap: Record<string, string> = {
+                              photos: "相片",
+                              videos: "影片",
+                              music: "音樂",
+                              letters: "信件",
+                              artworks: "畫作"
+                            };
+                            setSelectedSub({
+                              ...sub,
+                              imageUrl: sub.image_url || sub.cover_url,
+                              type: typeMap[sub.type] || "應援"
+                            });
+                          }}
+                          className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/80 hover:bg-white border border-[#FF799C]/10 text-xs text-[#6E4B55]/90 hover:border-[#FF799C]/30 hover:shadow-sm transition-all text-left active:scale-[0.99] cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {sub.image_url || sub.cover_url ? (
+                              <div className="h-7 w-7 rounded-md overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
+                                <img src={sub.image_url || sub.cover_url} alt={sub.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                            ) : (
+                              <div className="h-7 w-7 rounded-md bg-[#FF799C]/5 border border-[#FF799C]/10 flex items-center justify-center shrink-0">
+                                <FileText className="h-3.5 w-3.5 text-[#FF799C]/60" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <span className="text-[8px] font-mono bg-amber-500/10 text-amber-600 px-1 py-0.5 rounded mr-1.5 font-bold">
+                                {sub.type === "photos" ? "相片" : sub.type === "videos" ? "影片" : sub.type === "music" ? "音樂" : sub.type === "letters" ? "信件" : "畫作"}
+                              </span>
+                              <span className="font-sans font-medium text-[#6E4B55] truncate inline-block align-middle max-w-[120px]">{sub.title || sub.content?.substring(0, 10)}</span>
                             </div>
-                          ) : (
-                            <div className="h-7 w-7 rounded-md bg-[#FF799C]/5 border border-[#FF799C]/10 flex items-center justify-center shrink-0">
-                              <FileText className="h-3.5 w-3.5 text-[#FF799C]/60" />
+                          </div>
+                          <span className="text-[10px] text-amber-500">⭐</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {socialSubTab === "notifications" && (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {notifications.length === 0 ? (
+                      <div className="text-center py-8 text-xs font-serif text-[#6E4B55]/50 leading-relaxed bg-white/40 rounded-xl border border-dashed border-[#FF799C]/10">
+                        🔔 暫無星光通知。<br />
+                        當有人點讚、收藏或在你作品下留言時，將在此即時顯示！
+                      </div>
+                    ) : (
+                      notifications.map((notif: any) => (
+                        <div
+                          key={notif.id}
+                          className={`p-2.5 rounded-xl border text-xs flex gap-2.5 items-start transition-all ${notif.is_read ? "bg-white/40 border-[#FF799C]/5 opacity-80" : "bg-white border-[#FF799C]/25 shadow-sm"}`}
+                        >
+                          <div className="h-7 w-7 rounded-full overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
+                            <img src={notif.sender_avatar} alt={notif.sender_name} className="h-full w-full object-cover" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-[#6E4B55]">{notif.sender_name}</span>
+                              <span className="text-[9px] text-[#6E4B55]/50 font-mono">{new Date(notif.created_at).toLocaleDateString("zh-TW")}</span>
                             </div>
-                          )}
-                          <div className="min-w-0">
-                            <span className="text-[8px] font-mono bg-[#FF799C]/10 text-[#FF799C] px-1 py-0.5 rounded mr-1.5 font-bold">
-                              {sub.type}
-                            </span>
-                            <span className="font-sans font-medium text-[#6E4B55] truncate inline-block align-middle max-w-[120px]">{sub.title}</span>
+                            <p className="text-[11px] text-[#6E4B55]/85 mt-0.5 leading-relaxed">{notif.content}</p>
                           </div>
                         </div>
-
-                        {/* Status tag */}
-                        <div className="flex items-center gap-1 shrink-0 ml-1">
-                          <span className={`text-[8px] font-mono font-bold px-2 py-0.5 rounded-full ${sub.status === "approved" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : sub.status === "rejected" ? "bg-red-500/10 text-red-600 border border-red-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20 animate-pulse"}`}>
-                            {sub.status === "approved" ? "已公開" : sub.status === "rejected" ? "退回" : "審核中"}
-                          </span>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

@@ -18,6 +18,17 @@ const SEED_DATA = {
       avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=celia&backgroundColor=ffdeeb",
       background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
       star_coins: 100
+    },
+    {
+      id: "anonymous",
+      username: "Anonymous",
+      email: "anonymous@starry.com",
+      password: "anonymouspassword",
+      role: "user",
+      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Anonymous",
+      background: "",
+      star_coins: 0,
+      is_guest: true
     }
   ],
   posts_photos: [] as any[],
@@ -103,6 +114,27 @@ export async function getDbKey(key: string): Promise<any> {
       const { data, error } = await supabase.from("profiles").select("*");
       if (error) throw error;
       result = data;
+      if (result && !result.some((u: any) => u.id === "anonymous")) {
+        const anonUser = {
+          id: "anonymous",
+          username: "Anonymous",
+          email: "anonymous@starry.com",
+          password: "anonymouspassword",
+          avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Anonymous",
+          background: "",
+          star_coins: 0,
+          role: "user",
+          bio: "Anonymous user profile",
+          is_guest: true,
+          solo_pet: null
+        };
+        try {
+          await supabase.from("profiles").insert(anonUser);
+        } catch (e) {
+          console.warn("Failed to insert anonymous user on getDbKey:", e);
+        }
+        result.push(anonUser);
+      }
     } else if (key.startsWith("posts_")) {
       const type = key.replace("posts_", "");
       const { data, error } = await supabase.from("posts").select("*").eq("type", type);
@@ -154,6 +186,21 @@ export async function setDbKey(key: string, value: any): Promise<void> {
         is_guest: Boolean(u.is_guest),
         solo_pet: u.solo_pet || null
       }));
+      if (!cleanUsers.some((u: any) => u.id === "anonymous")) {
+        cleanUsers.push({
+          id: "anonymous",
+          username: "Anonymous",
+          email: "anonymous@starry.com",
+          password: "anonymouspassword",
+          avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Anonymous",
+          background: "",
+          star_coins: 0,
+          role: "user",
+          bio: "Anonymous user profile",
+          is_guest: true,
+          solo_pet: null
+        });
+      }
       const { error } = await supabase.from("profiles").upsert(cleanUsers);
       if (error) throw error;
     } else if (key.startsWith("posts_")) {
@@ -1544,6 +1591,59 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
       const collection = await getDbKey(`posts_${type}`);
 
+      const notifyAdminOfNewSubmission = async (postType: string, postItem: any) => {
+        if (postItem.status === "approved") return;
+        try {
+          const users = await getDbKey("users");
+          const admins = users.filter((u: any) => u.role === "admin" || u.email?.trim().toLowerCase() === "celia970105@gmail.com");
+          
+          for (const admin of admins) {
+            const notifId = `notif_pending_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            const senderName = postItem.username || "匿名同盟";
+            const postTitle = postItem.title || "無標題投稿";
+            const displayType = 
+              postType === "photos" ? "相片" :
+              postType === "music" ? "音樂" :
+              postType === "videos" ? "影片" :
+              postType === "letters" ? "信件" :
+              postType === "artworks" ? "同人畫作" :
+              postType === "candies" ? "糖果" : "應援投稿";
+
+            const newNotif = {
+              id: notifId,
+              user_id: admin.id,
+              sender_id: postItem.user_id === "anonymous" ? "anonymous" : postItem.user_id,
+              sender_name: senderName,
+              sender_avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Submission",
+              type: "announcement",
+              post_id: postItem.id,
+              post_title: postTitle,
+              post_type: postType,
+              content: `📢 收到來自【${senderName}】的新${displayType}投稿：「${postTitle}」！請前往管理控台審核。✨`,
+              is_read: false,
+              created_at: new Date().toISOString()
+            };
+
+            if (supabase) {
+              await supabase.from("notifications").insert({
+                id: notifId,
+                user_id: admin.id,
+                sender_id: postItem.user_id === "anonymous" ? "anonymous" : postItem.user_id,
+                type: "announcement",
+                post_id: postItem.id,
+                content: `📢 收到來自【${senderName}】的新${displayType}投稿：「${postTitle}」！請前往管理控台審核。✨`
+              });
+            } else {
+              const localNotifs = JSON.parse(localStorage.getItem("starry_local_notifications") || "[]");
+              localNotifs.unshift(newNotif);
+              localStorage.setItem("starry_local_notifications", JSON.stringify(localNotifs));
+            }
+          }
+        } catch (err) {
+          console.error("notifyAdminOfNewSubmission error:", err);
+        }
+      };
+
       if (type === "photos") {
         const imgUrl = await uploadBase64ToStorage(payload.image_url);
         const post = {
@@ -1555,6 +1655,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
+        await notifyAdminOfNewSubmission(type, post);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
@@ -1567,6 +1668,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
+        await notifyAdminOfNewSubmission(type, post);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
@@ -1580,6 +1682,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
+        await notifyAdminOfNewSubmission(type, post);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
@@ -1594,6 +1697,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
+        await notifyAdminOfNewSubmission(type, post);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
@@ -1622,6 +1726,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
+        await notifyAdminOfNewSubmission(type, post);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
@@ -1642,6 +1747,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
+        await notifyAdminOfNewSubmission(type, post);
         return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
     }

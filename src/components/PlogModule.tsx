@@ -58,18 +58,18 @@ const TEXT_COLORS = [
 
 const BG_TEMPLATES = [
   { 
-    id: "sweet-pink", 
-    name: "🌸 蜜桃粉櫻甜夢", 
-    class: "bg-gradient-to-tr from-[#FFF0F5] to-[#FFE4E1]", 
-    gradient: ["#FFF0F5", "#FFE4E1"],
+    id: "pink-white-grad", 
+    name: "💗 蜜粉星光漸層", 
+    class: "bg-gradient-to-tr from-[#FF799C] to-white", 
+    gradient: ["#FF799C", "#FFFFFF"],
     textColor: "#FF799C"
   },
   { 
-    id: "cosmic-night", 
-    name: "🌌 宇宙極光霓虹", 
-    class: "bg-gradient-to-b from-[#130CB7] to-[#52E5E7]", 
-    gradient: ["#130CB7", "#52E5E7"],
-    textColor: "#FFFFFF"
+    id: "cute-polka-dots", 
+    name: "🍡 可愛粉萌波點", 
+    class: "bg-[#FFF5F7]", 
+    gradient: ["#FFF5F7", "#FFF5F7"],
+    textColor: "#FF799C"
   },
   { 
     id: "retro-polaroid", 
@@ -77,13 +77,6 @@ const BG_TEMPLATES = [
     class: "bg-[#FAF9F6] border-8 border-white shadow-inner", 
     gradient: ["#FAF9F6", "#FAF9F6"],
     textColor: "#333333"
-  },
-  { 
-    id: "lavender-mist", 
-    name: "💜 薰衣草星霧", 
-    class: "bg-gradient-to-tr from-[#E0C3FC] to-[#8EC5FC]", 
-    gradient: ["#E0C3FC", "#8EC5FC"],
-    textColor: "#6B5B95"
   }
 ];
 
@@ -866,6 +859,22 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
           // Draw elegant white Polaroid inner border
           ctx.fillStyle = "#FFFFFF";
           ctx.fillRect(50, 50, canvasSize - 100, canvasSize - 150);
+        } else if (currentBg.id === "cute-polka-dots") {
+          ctx.fillStyle = "#FFF5F7";
+          ctx.fillRect(0, 0, canvasSize, canvasSize);
+          
+          ctx.fillStyle = "rgba(255, 121, 156, 0.25)";
+          const dotRadius = 8;
+          const spacing = 48;
+          for (let x = 0; x <= canvasSize; x += spacing) {
+            for (let y = 0; y <= canvasSize; y += spacing) {
+              // Offset alternating rows for a cute staggered pattern
+              const offsetX = (Math.floor(y / spacing) % 2) * (spacing / 2);
+              ctx.beginPath();
+              ctx.arc(x + offsetX, y, dotRadius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
         } else {
           const grad = ctx.createLinearGradient(0, 0, canvasSize, canvasSize);
           grad.addColorStop(0, currentBg.gradient[0]);
@@ -874,9 +883,9 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
           ctx.fillRect(0, 0, canvasSize, canvasSize);
         }
 
-        // 2. Drawgrid decorative overlay for cute dreaming themes
-        if (currentBg.id === "sweet-pink" || currentBg.id === "lavender-mist") {
-          ctx.strokeStyle = "rgba(255, 121, 156, 0.15)";
+        // 2. Draw subtle grid overlay for pink-white-grad to make it richer
+        if (currentBg.id === "pink-white-grad") {
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
           ctx.lineWidth = 2;
           const spacing = 50;
           for (let x = 0; x < canvasSize; x += spacing) {
@@ -890,19 +899,6 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
             ctx.moveTo(0, y);
             ctx.lineTo(canvasSize, y);
             ctx.stroke();
-          }
-        }
-
-        // Draw starry galaxy grids for Cosmic aurora theme
-        if (currentBg.id === "cosmic-night") {
-          ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-          for (let i = 0; i < 40; i++) {
-            const starX = Math.random() * canvasSize;
-            const starY = Math.random() * canvasSize;
-            const starR = 1 + Math.random() * 3;
-            ctx.beginPath();
-            ctx.arc(starX, starY, starR, 0, Math.PI * 2);
-            ctx.fill();
           }
         }
       }
@@ -1091,18 +1087,15 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
             ref={canvasRef}
             onClick={() => setSelectedId(null)} // Clear selection on clicking void canvas
             className={`relative w-full aspect-square max-w-[450px] rounded-2xl overflow-hidden shadow-md select-none border-2 border-[#FF799C]/15 cursor-default transition-all ${currentBg.class}`}
+            style={currentBg.id === "cute-polka-dots" ? {
+              backgroundImage: "radial-gradient(rgba(255,121,156,0.2) 15%, transparent 15%)",
+              backgroundColor: "#FFF5F7",
+              backgroundSize: "24px 24px"
+            } : undefined}
           >
             {/* Template background details (Grids / Stars) */}
-            {!isGridMode && (currentBg.id === "sweet-pink" || currentBg.id === "lavender-mist") && (
+            {!isGridMode && currentBg.id === "pink-white-grad" && (
               <div className="absolute inset-0 bg-[linear-gradient(rgba(255,121,156,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,121,156,0.06)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
-            )}
-
-            {!isGridMode && currentBg.id === "cosmic-night" && (
-              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.15)_0%,transparent_60%)]">
-                <div className="absolute top-10 left-15 text-white/10 text-lg animate-pulse">⭐</div>
-                <div className="absolute top-24 right-12 text-white/20 text-xs">✨</div>
-                <div className="absolute bottom-16 left-12 text-white/15 text-sm animate-ping">✨</div>
-              </div>
             )}
 
             {/* Interactive Grid Stitching Background */}

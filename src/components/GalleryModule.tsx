@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Filter, Eye, Camera, X, Check, Calendar, Tag, AlertCircle, RefreshCw } from "lucide-react";
 import { PhotoPost, User } from "../types";
 import SocialInteractiveBlock from "./SocialInteractiveBlock";
+import { compressImage } from "../lib/imageCompressor";
 
 interface GalleryModuleProps {
   currentUser: User | null;
@@ -48,10 +49,16 @@ export default function GalleryModule({ currentUser, onRefreshData }: GalleryMod
     setIsReadingFile(true);
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const base64String = event.target?.result as string;
-      setImageUrl(base64String);
-      setIsReadingFile(false);
+      try {
+        const compressed = await compressImage(base64String, 1000, 0.75);
+        setImageUrl(compressed);
+      } catch (err) {
+        setImageUrl(base64String);
+      } finally {
+        setIsReadingFile(false);
+      }
     };
     reader.onerror = () => {
       setSubmitError("讀取相片檔案失敗，請再試一次。");

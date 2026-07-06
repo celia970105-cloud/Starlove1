@@ -4,6 +4,7 @@ import { LogIn, UserPlus, LogOut, CheckCircle, AlertCircle, Edit3, Image, Shield
 import { User } from "../types";
 import { useLanguage } from "../context/LanguageContext";
 import { saveUserBackup } from "../lib/syncHelper";
+import { compressImage } from "../lib/imageCompressor";
 
 interface UserModuleProps {
   currentUser: User | null;
@@ -439,9 +440,14 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         if (typeof reader.result === "string") {
-          saveProfileSetting("avatar", reader.result);
+          try {
+            const compressed = await compressImage(reader.result, 300, 0.8);
+            saveProfileSetting("avatar", compressed);
+          } catch (err) {
+            saveProfileSetting("avatar", reader.result);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -452,9 +458,14 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         if (typeof reader.result === "string") {
-          saveProfileSetting("background", reader.result);
+          try {
+            const compressed = await compressImage(reader.result, 800, 0.75);
+            saveProfileSetting("background", compressed);
+          } catch (err) {
+            saveProfileSetting("background", reader.result);
+          }
         }
       };
       reader.readAsDataURL(file);

@@ -576,13 +576,18 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                         </div>
 
                         {/* Disable delete for active admin */}
-                        {u.username !== "admin" && (
+                        {u.email?.trim().toLowerCase() !== "celia970105@gmail.com" && u.role !== "admin" && u.id !== "admin" && (
                           <button
-                            onClick={() => handleAction("users", u.id, "delete")}
-                            className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-100 transition-all active:scale-95 cursor-pointer"
+                            onClick={() => {
+                              if (window.confirm(`確定要完全物理刪除用戶「${u.username}」嗎？此操作將永久註銷其帳號與星寵數據且不可恢復！`)) {
+                                handleAction("users", u.id, "delete");
+                              }
+                            }}
+                            className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-100 transition-all active:scale-95 cursor-pointer flex items-center gap-1"
                             title="註銷帳戶"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
+                            <span className="text-[10px] font-bold">刪除</span>
                           </button>
                         )}
                       </div>

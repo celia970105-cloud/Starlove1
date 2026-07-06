@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Star, Camera, Film, Mail, Palette, Music, Sparkles, Smile, Shield, User as UserIcon, Heart, Compass, Layout } from "lucide-react";
 import { useLanguage } from "./context/LanguageContext";
@@ -28,6 +28,8 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<string>("home");
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; char: string }[]>([]);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [adminToast, setAdminToast] = useState<{ message: string; show: boolean } | null>(null);
+  const lastPendingCountRef = useRef<number | null>(null);
 
   // Leaderboard and active user tracking states
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
@@ -400,6 +402,70 @@ export default function App() {
     const interval = setInterval(fetchUnreadCount, 6000);
     return () => clearInterval(interval);
   }, [currentUser?.id, activeModule]);
+
+  // Admin-specific pending submissions poller & real-time notification
+  useEffect(() => {
+    const isAdmin = currentUser?.role === "admin" || currentUser?.email?.trim().toLowerCase() === "celia970105@gmail.com";
+    if (!isAdmin) {
+      lastPendingCountRef.current = null;
+      return;
+    }
+
+    const checkPendingSubmissions = async () => {
+      try {
+        const res = await fetch("/api/admin/pending");
+        if (res.ok) {
+          const pending = await res.json();
+          const totalCount = 
+            (pending.photos?.length || 0) +
+            (pending.videos?.length || 0) +
+            (pending.letters?.length || 0) +
+            (pending.artworks?.length || 0) +
+            (pending.music?.length || 0) +
+            (pending.candies?.length || 0);
+
+          const prevCount = lastPendingCountRef.current;
+          if (prevCount !== null && totalCount > prevCount) {
+            // A new submission is waiting! Show toast & play beautiful chime!
+            setAdminToast({
+              message: `🔔 收到新的使用者應援投稿（目前共 ${totalCount} 件待審核），請前往管理員控台審核！`,
+              show: true
+            });
+            
+            // Play gentle chime via browser audio context
+            try {
+              const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+              if (AudioContext) {
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+                osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+                osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.24); // G5
+                osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.36); // C6
+                gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.8);
+              }
+            } catch (soundErr) {
+              console.warn("Chime play error:", soundErr);
+            }
+          }
+          lastPendingCountRef.current = totalCount;
+        }
+      } catch (err) {
+        console.error("Failed to fetch pending submissions:", err);
+      }
+    };
+
+    checkPendingSubmissions(); // Run once initially
+    const interval = setInterval(checkPendingSubmissions, 8000); // Poll every 8 seconds
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   // Periodic autosave game record loop (mimicking general games to prevent data loss)
   useEffect(() => {
@@ -1397,6 +1463,45 @@ export default function App() {
             onClose={() => setIsLeaderboardOpen(false)}
             currentUser={currentUser}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Real-time Admin Pending Notification Toast */}
+      <AnimatePresence>
+        {adminToast?.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -50, scale: 0.9 }}
+            className="fixed top-20 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] bg-[#FFF6F2] text-[#6E4B55] border-2 border-[#FF799C] p-4 rounded-2xl shadow-2xl flex flex-col gap-3 pointer-events-auto"
+          >
+            <div className="flex items-start gap-2.5">
+              <div className="h-9 w-9 rounded-full bg-[#FF799C]/10 flex items-center justify-center shrink-0">
+                <Shield className="h-5 w-5 text-[#FF799C]" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-xs text-[#FF799C] tracking-wide">最高權限管理員即時通知</h4>
+                <p className="text-xs font-medium leading-relaxed mt-1 text-[#6E4B55]">{adminToast.message}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 text-xs">
+              <button
+                onClick={() => setAdminToast(prev => prev ? { ...prev, show: false } : null)}
+                className="px-3 py-1.5 rounded-xl border border-[#FF799C]/20 text-[#6E4B55]/70 hover:bg-[#FF799C]/5 active:scale-95 transition-all cursor-pointer font-medium"
+              >
+                關閉
+              </button>
+              <button
+                onClick={() => {
+                  setAdminToast(prev => prev ? { ...prev, show: false } : null);
+                  setActiveModule("admin");
+                }}
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] text-white hover:opacity-90 active:scale-95 transition-all shadow-md shadow-[#FF799C]/20 cursor-pointer font-semibold flex items-center gap-1"
+              >
+                立即前往審核
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

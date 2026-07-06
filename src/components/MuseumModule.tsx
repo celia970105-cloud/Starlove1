@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ExternalLink, Maximize2, Palette, X, Plus, AlertCircle, Sparkles, Check } from "lucide-react";
 import { ArtworkPost, User } from "../types";
 import SocialInteractiveBlock from "./SocialInteractiveBlock";
+import { compressImage } from "../lib/imageCompressor";
 
 interface MuseumModuleProps {
   currentUser: User | null;
@@ -53,8 +54,14 @@ export default function MuseumModule({ currentUser, onRefreshData }: MuseumModul
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
+      reader.onloadend = async () => {
+        const raw = reader.result as string;
+        try {
+          const compressed = await compressImage(raw, 1000, 0.75);
+          setImageUrl(compressed);
+        } catch (err) {
+          setImageUrl(raw);
+        }
       };
       reader.onerror = () => {
         setSubmitError("讀取圖片檔案失敗，請重試。");

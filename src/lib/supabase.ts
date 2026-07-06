@@ -347,15 +347,77 @@ export async function initializeDatabase() {
   }
 }
 
+// Helper to compress base64 image if it's too large to save space and load faster
+export async function compressBase64ImageIfNeeded(base64: string, quality: number = 0.75): Promise<string> {
+  if (!base64 || !base64.startsWith("data:image/")) return base64;
+  if (base64.includes("image/svg+xml") || base64.includes("image/gif")) return base64;
+  
+  return new Promise((resolve) => {
+    const img = window.Image ? new window.Image() : document.createElement("img");
+    img.crossOrigin = "anonymous";
+    img.src = base64;
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        
+        // Limit max dimensions to 1000px to optimize space and transfer speed
+        const maxDim = 1000;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(base64);
+          return;
+        }
+        
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Export to highly compressed JPEG to save database space & ensure super smooth loading
+        const compressed = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressed);
+      } catch (e) {
+        console.warn("Base64 compression failed:", e);
+        resolve(base64);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64);
+    };
+  });
+}
+
 // Upload base64 asset to Supabase Storage
 export async function uploadBase64ToStorage(base64: string): Promise<string> {
-  if (!supabase) return base64;
+  if (!base64) return base64;
+
+  // Always compress the image first to ensure space efficiency and smoothness,
+  // regardless of whether we're saving to Supabase Storage or keeping in local database.
+  let optimizedBase64 = base64;
+  if (base64.startsWith("data:image/")) {
+    optimizedBase64 = await compressBase64ImageIfNeeded(base64, 0.75);
+  }
+
+  if (!supabase) return optimizedBase64;
   try {
     // If it's already a public URL or not a base64, return as is
-    if (!base64.startsWith("data:")) return base64;
+    if (!optimizedBase64.startsWith("data:")) return optimizedBase64;
 
-    const parts = base64.split(";base64,");
-    if (parts.length !== 2) return base64;
+    const parts = optimizedBase64.split(";base64,");
+    if (parts.length !== 2) return optimizedBase64;
     
     const contentType = parts[0].split(":")[1];
     const raw = window.atob(parts[1]);
@@ -373,13 +435,13 @@ export async function uploadBase64ToStorage(base64: string): Promise<string> {
       .from("starry_assets")
       .upload(filename, blob, {
         contentType,
-        cacheControl: "3600",
+        cacheControl: "31536000, public, immutable", // Cache for 1 year for long-lasting, smooth loading!
         upsert: true
       });
       
     if (error) {
       console.warn("Supabase Storage upload failed, keeping base64 payload:", error);
-      return base64;
+      return optimizedBase64;
     }
     
     const { data: { publicUrl } } = supabase.storage
@@ -389,7 +451,7 @@ export async function uploadBase64ToStorage(base64: string): Promise<string> {
     return publicUrl;
   } catch (err) {
     console.warn("Supabase Storage upload process error, keeping base64:", err);
-    return base64;
+    return optimizedBase64;
   }
 }
 

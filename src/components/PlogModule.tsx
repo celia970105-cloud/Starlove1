@@ -311,45 +311,95 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
         }
       }
 
+      // Draw overlay elements (emojis, texts, stickers) on top of the stitch grid
+      const scaleFactor = canvasSize / 450;
+      for (const el of elements) {
+        ctx.save();
+
+        const canvasX = el.x * scaleFactor;
+        const canvasY = el.y * scaleFactor;
+
+        ctx.translate(canvasX, canvasY);
+        ctx.rotate((el.rotation * Math.PI) / 180);
+
+        if (el.type === "image") {
+          try {
+            const img = await loadImage(el.src!);
+            const w = img.width;
+            const h = img.height;
+            const maxDimension = 350;
+            const ratio = Math.min(maxDimension / w, maxDimension / h);
+            const drawW = w * ratio * el.scale;
+            const drawH = h * ratio * el.scale;
+
+            ctx.fillStyle = "#FFFFFF";
+            ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 6;
+
+            const padding = 12;
+            ctx.fillRect(
+              -drawW / 2 - padding,
+              -drawH / 2 - padding,
+              drawW + padding * 2,
+              drawH + padding * 2 + 15
+            );
+
+            ctx.shadowColor = "transparent";
+            ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+          } catch (e) {
+            console.error("Skipping image drawing on stitch export:", e);
+          }
+        } else if (el.type === "sticker") {
+          ctx.font = `bold ${55 * el.scale}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 6;
+          ctx.strokeText(el.src!, 0, 0);
+          ctx.fillText(el.src!, 0, 0);
+        } else if (el.type === "text") {
+          ctx.font = `bold ${el.fontSize * 1.5}px sans-serif`;
+          ctx.fillStyle = el.color!;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 2;
+
+          ctx.strokeStyle = el.color === "#FFFFFF" ? "#000000" : "#FFFFFF";
+          ctx.lineWidth = 3;
+          ctx.strokeText(el.text!, 0, 0);
+          ctx.fillText(el.text!, 0, 0);
+        }
+
+        ctx.restore();
+      }
+
       ctx.fillStyle = "rgba(255, 121, 156, 0.6)";
       ctx.font = "bold 14px sans-serif";
       ctx.fillText("STARRY WISH • GRID COLLAGE", canvasSize - 250, canvasSize - 35);
 
       const base64DataUrl = exportCanvas.toDataURL("image/png");
 
-      const title = stitchTitle.trim() || `我的應援${stitchGridType}宮格拼接拼圖 💖`;
-      const payload = {
-        title,
-        image_url: base64DataUrl,
-        year: String(new Date().getFullYear()),
-        category: stitchCategory,
-        user_id: currentUser?.id || "anonymous",
-        username: currentUser?.username || "Anonymous Visitor",
-        role: currentUser?.role || "user"
-      };
+      // Trigger automatic direct browser file download to local album!
+      const link = document.createElement("a");
+      link.download = `StarryWish_Stitched_${Date.now()}.png`;
+      link.href = base64DataUrl;
+      link.click();
 
-      const res = await fetch("/api/posts/photos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload })
-      });
+      alert(`🎉 拼接拼圖製作成功！已直接匯出下載至您的手機相冊 📸\n獲得星星幣 +50 🪙 獎勵！`);
 
-      if (res.ok) {
-        const data = await res.json();
-        alert(`🎉 拼接拼圖製作成功並已上傳儲存至 Plog！\n獲得星星幣 +50 🪙`);
-        
-        fetch("/api/posts/photos")
-          .then((r) => r.ok ? r.json() : [])
-          .then((d) => setPhotos(d));
-
-        setStitchTitle("");
-        const emptyCells = stitchGridType === "4" ? 4 : 9;
-        setStitchPhotos(Array(emptyCells).fill(null));
-        setStitchActiveIndex(0);
-      } else {
-        const data = await res.json();
-        alert(data.error || "儲存至 Plog 資料表失敗，請重新再試。");
-      }
+      setStitchTitle("");
+      const emptyCells = stitchGridType === "4" ? 4 : 9;
+      setStitchPhotos(Array(emptyCells).fill(null));
+      setStitchActiveIndex(0);
+      setElements([]); // Clear overlay elements for next creation
+      setSelectedId(null);
 
     } catch (error) {
       console.error("Failed to generate and save stitch puzzle:", error);
@@ -1734,12 +1784,18 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
               </div>
             </div>
 
-            {/* Interactive Grid Canvas Box */}
-            <div className="relative w-full aspect-square max-w-[450px] rounded-2xl overflow-hidden shadow-md bg-white border-2 border-[#FF799C]/15 p-3 flex flex-col justify-between">
+            {/* Interactive Grid Canvas Box with Draggable Overlay Elements */}
+            <div 
+              ref={canvasRef}
+              onClick={() => setSelectedId(null)}
+              className="relative w-full aspect-square max-w-[450px] rounded-2xl overflow-hidden shadow-md bg-white border-2 border-[#FF799C]/15 select-none cursor-default transition-all"
+            >
+              {/* Underlay Grid Stitching Layout */}
               <div 
-                className="grid gap-2 w-full h-full"
+                className="absolute inset-0 p-2 gap-2 bg-white grid"
                 style={{
                   gridTemplateColumns: stitchGridType === "4" ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+                  gridTemplateRows: stitchGridType === "4" ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
                 }}
               >
                 {stitchPhotos.map((url, idx) => {
@@ -1748,7 +1804,10 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
                     <button
                       key={`stitch-slot-${idx}`}
                       type="button"
-                      onClick={() => setStitchActiveIndex(idx)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setStitchActiveIndex(idx);
+                      }}
                       className={`aspect-square rounded-xl border-3 transition-all flex flex-col items-center justify-center overflow-hidden relative cursor-pointer ${
                         isActive 
                           ? "border-[#FF799C] ring-4 ring-[#FF799C]/15 bg-[#FFF0F4]/35 scale-102 z-10" 
@@ -1756,9 +1815,9 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
                       }`}
                     >
                       {url ? (
-                        <img src={url} alt={`stitch-slot-${idx}`} className="w-full h-full object-cover animate-fadeIn" />
+                        <img src={url} alt={`stitch-slot-${idx}`} className="w-full h-full object-cover animate-fadeIn pointer-events-none" />
                       ) : (
-                        <div className="flex flex-col items-center gap-1 text-gray-400">
+                        <div className="flex flex-col items-center gap-1 text-gray-400 pointer-events-none">
                           <Camera className="h-5 w-5 opacity-40" />
                           <span className="text-[10px] font-black">槽位 {idx + 1}</span>
                           <span className="text-[8px] opacity-70">點擊選取</span>
@@ -1771,6 +1830,155 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
                   );
                 })}
               </div>
+
+              {/* Draggable Collage Elements Overlaid on top of grid slots */}
+              {elements.map((el) => {
+                const isSelected = el.id === selectedId;
+                return (
+                  <motion.div
+                    key={`${el.id}-${el.x}-${el.y}`}
+                    drag
+                    dragMomentum={false}
+                    dragConstraints={canvasRef}
+                    dragElastic={0}
+                    onDragStart={() => {
+                      setSelectedId(el.id);
+                      setIsDragging(true);
+                    }}
+                    onDragEnd={(event, info) => {
+                      setIsDragging(false);
+                      let nextX = el.x + info.offset.x;
+                      let nextY = el.y + info.offset.y;
+                      
+                      const { halfW, halfH } = getElementHalfDimensions(el);
+                      nextX = Math.max(halfW, Math.min(450 - halfW, nextX));
+                      nextY = Math.max(halfH, Math.min(450 - halfH, nextY));
+
+                      setElements(prev =>
+                        prev.map(item => item.id === el.id ? { ...item, x: nextX, y: nextY } : item)
+                      );
+                    }}
+                    style={{
+                      left: `${el.x}px`,
+                      top: `${el.y}px`,
+                      transform: `translate(-50%, -50%) rotate(${el.rotation}deg) scale(${el.scale})`,
+                      position: "absolute",
+                      zIndex: isSelected ? 30 : 25,
+                    }}
+                    className={`absolute origin-center select-none cursor-grab active:cursor-grabbing ${
+                      isSelected ? "ring-2 ring-[#FF799C] ring-dashed p-1 bg-white/25 rounded-md" : ""
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedId(el.id);
+                    }}
+                  >
+                    {/* Delete button wrapper when selected */}
+                    {isSelected && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSelectedElement();
+                        }}
+                        className="absolute -top-7 -right-7 bg-[#FF799C] hover:bg-[#FF4B72] text-white p-1 rounded-full shadow-md hover:scale-110 active:scale-95 transition-all z-40 cursor-pointer"
+                        title="刪除物件"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+
+                    {/* Render based on Type */}
+                    {el.type === "image" && (
+                      <div className="bg-white p-1.5 shadow-md border border-gray-100 max-w-[140px] flex flex-col rounded-sm pointer-events-none">
+                        <img
+                          src={el.src}
+                          alt="Collage Part"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-auto object-cover max-h-[140px] rounded-sm pointer-events-none"
+                        />
+                      </div>
+                    )}
+
+                    {el.type === "sticker" && (
+                      <span className="text-4xl filter drop-shadow-md select-none block pointer-events-none">
+                        {el.src}
+                      </span>
+                    )}
+
+                    {el.type === "text" && (
+                      <span
+                        style={{
+                          color: el.color,
+                          fontSize: `${el.fontSize}px`,
+                          fontWeight: "bold",
+                          whiteSpace: "nowrap",
+                          textShadow: el.color === "#FFFFFF" 
+                            ? "1px 1px 2px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.8)" 
+                            : "1px 1px 2px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9)",
+                        }}
+                        className="font-sans leading-none block select-none px-2 py-0.5 pointer-events-none"
+                      >
+                        {el.text}
+                      </span>
+                    )}
+                  </motion.div>
+                );
+              })}
+
+              {/* Inline floating controller */}
+              {selectedElement && !isDragging && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  style={{
+                    left: `${Math.max(130, Math.min(320, selectedElement.x))}px`,
+                    top: `${selectedElement.y > 225 ? Math.max(90, selectedElement.y - 145) : Math.min(360, selectedElement.y + 115)}px`,
+                    position: "absolute",
+                    zIndex: 40,
+                  }}
+                  className="bg-white/95 border border-[#FF799C]/25 px-3 py-2 rounded-2xl shadow-xl flex flex-col gap-1.5 select-none text-left min-w-[140px]"
+                >
+                  <div className="flex justify-between items-center gap-2 border-b border-gray-100 pb-1">
+                    <span className="text-[8px] font-black text-[#6E4B55]">編輯屬性</span>
+                    <button
+                      onClick={deleteSelectedElement}
+                      className="text-[7.5px] text-red-500 font-bold hover:underline"
+                    >
+                      刪除
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] text-[#6E4B55] font-bold shrink-0 flex items-center gap-0.5 w-18">
+                        <Maximize2 className="h-3 w-3 text-[#FF799C]" /> 縮放 {selectedElement.scale.toFixed(1)}x
+                      </span>
+                      <input
+                        type="range"
+                        min={0.2}
+                        max={3.0}
+                        step={0.1}
+                        value={selectedElement.scale}
+                        onChange={(e) => updateSelectedElement("scale", parseFloat(e.target.value))}
+                        className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] text-[#6E4B55] font-bold shrink-0 flex items-center gap-0.5 w-18">
+                        <RotateCcw className="h-3 w-3 text-[#FF799C]" /> 旋轉 {selectedElement.rotation}°
+                      </span>
+                      <input
+                        type="range"
+                        min={-180}
+                        max={180}
+                        step={5}
+                        value={selectedElement.rotation}
+                        onChange={(e) => updateSelectedElement("rotation", parseInt(e.target.value))}
+                        className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
 
             {/* Premium Signature Label */}
@@ -1815,42 +2023,90 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Title and Category */}
-                <div className="space-y-2">
+            {/* Card 2: Add Texts and Stickers */}
+            <div className="bg-white/90 border border-[#FF799C]/15 rounded-2xl p-4 shadow-sm">
+              <h4 className="text-xs font-bold text-[#6E4B55] mb-2.5 flex items-center gap-1.5 border-b border-[#FF799C]/10 pb-2">
+                <Type className="h-3.5 w-3.5 text-[#FF799C]" /> 2. 拼接拼圖可愛文字與裝飾
+              </h4>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="在拼接區域任意添加文字..."
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    maxLength={24}
+                    className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#FF799C] flex-1 text-[#6E4B55]"
+                  />
+                  <button
+                    onClick={addTextElement}
+                    className="bg-[#FF799C] hover:bg-[#FF4B72] text-white font-bold text-xs px-4 rounded-xl transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> 新增
+                  </button>
+                </div>
+
+                <div className="space-y-2 pt-1">
                   <div>
-                    <label className="text-[9px] text-[#6E4B55] font-bold block mb-1">✍️ 拼圖標題：</label>
-                    <input
-                      type="text"
-                      placeholder="為這張精美拼接拼圖命名吧..."
-                      value={stitchTitle}
-                      onChange={(e) => setStitchTitle(e.target.value)}
-                      maxLength={32}
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#FF799C] text-[#6E4B55]"
-                    />
+                    <span className="text-[9px] text-gray-400 block mb-1">文字預設色調：</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TEXT_COLORS.map((color) => (
+                        <button
+                          key={color.code}
+                          onClick={() => setSelectedColor(color.code)}
+                          className={`w-5 h-5 rounded-full border transition-all active:scale-90 cursor-pointer flex items-center justify-center ${
+                            selectedColor === color.code ? "ring-2 ring-[#FF799C] border-white scale-110" : "border-gray-200"
+                          }`}
+                          style={{ backgroundColor: color.code }}
+                          title={color.name}
+                        >
+                          {selectedColor === color.code && (
+                            <Check className={`h-2.5 w-2.5 ${color.code === "#FFFFFF" ? "text-black" : "text-white"}`} />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-[9px] text-[#6E4B55] font-bold block mb-1">🏷️ 分類歸屬：</label>
-                    <select
-                      value={stitchCategory}
-                      onChange={(e) => setStitchCategory(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#FF799C] text-[#6E4B55]"
-                    >
-                      <option value="應援">✨ 應援日常</option>
-                      <option value="星寵">🐾 星寵成長</option>
-                      <option value="活動">🎪 節日活動</option>
-                      <option value="日常">🌸 歲月靜好</option>
-                    </select>
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <span className="text-[9px] text-gray-400 shrink-0">文字尺寸 ({textSize}px)：</span>
+                    <input
+                      type="range"
+                      min={14}
+                      max={64}
+                      value={textSize}
+                      onChange={(e) => setTextSize(parseInt(e.target.value))}
+                      className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Emojis & Stickers Presets list */}
+                <div className="border-t border-gray-100 pt-2.5 mt-2">
+                  <span className="text-[9px] text-[#FF799C] font-semibold block mb-1">🍥 點擊添加可愛裝飾貼紙庫：</span>
+                  <div className="grid grid-cols-6 gap-2 bg-pink-50/20 border border-[#FF799C]/10 p-2.5 rounded-xl max-h-[110px] overflow-y-auto">
+                    {PRESET_STICKERS.map((stk) => (
+                      <button
+                        key={stk.char}
+                        onClick={() => addStickerElement(stk.char)}
+                        className="flex flex-col items-center justify-center p-1.5 bg-white rounded-lg border border-gray-100 hover:border-[#FF799C] transition-all cursor-pointer hover:scale-110 active:scale-95 shadow-sm"
+                        title={stk.label}
+                      >
+                        <span className="text-xl select-none">{stk.char}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Photo Source List */}
-            <div className="bg-white/90 border border-[#FF799C]/15 rounded-2xl p-4 shadow-sm flex-1 flex flex-col min-h-[300px]">
+            {/* Card 3: Photo Source List */}
+            <div className="bg-white/90 border border-[#FF799C]/15 rounded-2xl p-4 shadow-sm flex flex-col min-h-[300px]">
               <h4 className="text-xs font-bold text-[#6E4B55] mb-2 flex items-center gap-1.5 border-b border-[#FF799C]/10 pb-2">
-                <ImageIcon className="h-3.5 w-3.5 text-[#FF799C]" /> 2. 選擇照片填入當前「槽位 {stitchActiveIndex + 1}」
+                <ImageIcon className="h-3.5 w-3.5 text-[#FF799C]" /> 3. 選擇照片填入當前「槽位 {stitchActiveIndex + 1}」
               </h4>
 
               {/* Subtabs for photo sources */}
@@ -1973,17 +2229,17 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
                 {isStitchSaving ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" />
-                    <span>正在拼接星願拼圖 & 儲存中...</span>
+                    <span>正在拼接星願拼圖 & 導出中...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4.5 w-4.5 animate-pulse" />
-                    <span>🧩 完美拼接生成！並儲存至 Plog 畫廊 💖</span>
+                    <span>🧩 完美拼接生成！儲存至我的手機相冊 💖</span>
                   </>
                 )}
               </button>
               <p className="text-[8.5px] text-gray-400 text-center mt-2 leading-relaxed">
-                * 拼接完成後將會自動繪製 1000x1000 High-DPI 的正方形拼圖，自動上傳至 Supabase plog 資料庫，並獲得 <b>星星幣 +50 🪙</b> 獎勵！
+                * 拼接完成後將會自動繪製 1000x1000 High-DPI 的正方形拼圖，<b>直接導出下載儲存至您的本機手機相冊</b>，乾淨流暢、絕不佔用資料庫空間，並獲得 <b>星星幣 +50 🪙</b> 獎勵！
               </p>
             </div>
           </div>

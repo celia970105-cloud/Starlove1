@@ -415,6 +415,47 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         } else {
           localLikes.push(currentUserId);
           liked = true;
+
+          // Trigger local notification for like
+          try {
+            let postAuthorId = "";
+            let postTitle = "無標題";
+            let postType = "unknown";
+            const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+            for (const pt of pTypes) {
+              const list = await getDbKey(`posts_${pt}`);
+              const found = list.find((x: any) => x.id === postId);
+              if (found) {
+                postAuthorId = found.user_id;
+                postTitle = found.title || "無標題";
+                postType = pt;
+                break;
+              }
+            }
+            if (postAuthorId && postAuthorId !== currentUserId) {
+              const users = await getDbKey("users");
+              const senderUser = users.find((u: any) => u.id === currentUserId);
+              const newNotif = {
+                id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                user_id: postAuthorId,
+                sender_id: currentUserId,
+                sender_name: senderUser?.username || "未知用戶",
+                sender_avatar: senderUser?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown",
+                type: "like",
+                post_id: postId,
+                post_title: postTitle,
+                post_type: postType,
+                content: `點讚了你的投稿「${postTitle}」`,
+                is_read: false,
+                created_at: new Date().toISOString()
+              };
+              const localNotifs = JSON.parse(localStorage.getItem("starry_local_notifications") || "[]");
+              localNotifs.unshift(newNotif);
+              localStorage.setItem("starry_local_notifications", JSON.stringify(localNotifs));
+            }
+          } catch (err) {
+            console.error("Local notification for like failed:", err);
+          }
         }
         localStorage.setItem(`starry_local_likes_${postId}`, JSON.stringify(localLikes));
         count = localLikes.length;
@@ -464,6 +505,47 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         } else {
           localFavs.push(currentUserId);
           favorited = true;
+
+          // Trigger local notification for favorite
+          try {
+            let postAuthorId = "";
+            let postTitle = "無標題";
+            let postType = "unknown";
+            const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+            for (const pt of pTypes) {
+              const list = await getDbKey(`posts_${pt}`);
+              const found = list.find((x: any) => x.id === postId);
+              if (found) {
+                postAuthorId = found.user_id;
+                postTitle = found.title || "無標題";
+                postType = pt;
+                break;
+              }
+            }
+            if (postAuthorId && postAuthorId !== currentUserId) {
+              const users = await getDbKey("users");
+              const senderUser = users.find((u: any) => u.id === currentUserId);
+              const newNotif = {
+                id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                user_id: postAuthorId,
+                sender_id: currentUserId,
+                sender_name: senderUser?.username || "未知用戶",
+                sender_avatar: senderUser?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown",
+                type: "favorite",
+                post_id: postId,
+                post_title: postTitle,
+                post_type: postType,
+                content: `收藏了你的投稿「${postTitle}」`,
+                is_read: false,
+                created_at: new Date().toISOString()
+              };
+              const localNotifs = JSON.parse(localStorage.getItem("starry_local_notifications") || "[]");
+              localNotifs.unshift(newNotif);
+              localStorage.setItem("starry_local_notifications", JSON.stringify(localNotifs));
+            }
+          } catch (err) {
+            console.error("Local notification for favorite failed:", err);
+          }
         }
         localStorage.setItem(`starry_local_favs_${postId}`, JSON.stringify(localFavs));
         count = localFavs.length;
@@ -562,6 +644,47 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         localComments.push(newC);
         localStorage.setItem(`starry_local_comments_${postId}`, JSON.stringify(localComments));
+
+        // Trigger local notification for comment
+        try {
+          let postAuthorId = "";
+          let postTitle = "無標題";
+          let postType = "unknown";
+          const pTypes = ["photos", "videos", "letters", "artworks", "music"];
+          for (const pt of pTypes) {
+            const list = await getDbKey(`posts_${pt}`);
+            const found = list.find((x: any) => x.id === postId);
+            if (found) {
+              postAuthorId = found.user_id;
+              postTitle = found.title || "無標題";
+              postType = pt;
+              break;
+            }
+          }
+          if (postAuthorId && postAuthorId !== currentUserId) {
+            const senderUser = users.find((u: any) => u.id === currentUserId);
+            const newNotif = {
+              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              user_id: postAuthorId,
+              sender_id: currentUserId,
+              sender_name: senderUser?.username || "未知用戶",
+              sender_avatar: senderUser?.avatar || "https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown",
+              type: "comment",
+              post_id: postId,
+              post_title: postTitle,
+              post_type: postType,
+              content: `在你的投稿「${postTitle}」留下了留言：「${content}」`,
+              is_read: false,
+              created_at: new Date().toISOString()
+            };
+            const localNotifs = JSON.parse(localStorage.getItem("starry_local_notifications") || "[]");
+            localNotifs.unshift(newNotif);
+            localStorage.setItem("starry_local_notifications", JSON.stringify(localNotifs));
+          }
+        } catch (err) {
+          console.error("Local notification for comment failed:", err);
+        }
+
         return jsonResponse({ success: true, comment: newC });
       }
     }
@@ -617,7 +740,9 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         }));
         return jsonResponse(mapped);
       } else {
-        return jsonResponse([]);
+        const localNotifs = JSON.parse(localStorage.getItem("starry_local_notifications") || "[]");
+        const filtered = localNotifs.filter((n: any) => n.user_id === userId);
+        return jsonResponse(filtered);
       }
     }
 
@@ -632,6 +757,14 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         if (error) throw error;
         return jsonResponse({ success: true });
       } else {
+        const localNotifs = JSON.parse(localStorage.getItem("starry_local_notifications") || "[]");
+        const updated = localNotifs.map((n: any) => {
+          if (n.user_id === userId) {
+            return { ...n, is_read: true };
+          }
+          return n;
+        });
+        localStorage.setItem("starry_local_notifications", JSON.stringify(updated));
         return jsonResponse({ success: true });
       }
     }

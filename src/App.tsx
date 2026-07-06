@@ -25,6 +25,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeModule, setActiveModule] = useState<string>("home");
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; char: string }[]>([]);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   // Custom configurations from admin settings
   const [heroTitle, setHeroTitle] = useState("ALL FOR JIYU");
@@ -164,6 +165,29 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentUser?.id]);
 
+  // Check unread notifications count periodically
+  useEffect(() => {
+    if (!currentUser) {
+      setUnreadNotifs(0);
+      return;
+    }
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await fetch(`/api/social/notifications/${currentUser.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const unread = (data || []).filter((n: any) => !n.is_read).length;
+          setUnreadNotifs(unread);
+        }
+      } catch (err) {
+        console.error("Failed to fetch unread notifications count:", err);
+      }
+    };
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 6000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id, activeModule]);
+
   const handleLoginSuccess = (user: User) => {
     if (user && user.email?.trim().toLowerCase() === "celia970105@gmail.com") {
       user.role = "admin";
@@ -281,7 +305,7 @@ export default function App() {
             {currentUser ? (
               <button
                 onClick={() => setActiveModule("user")}
-                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border transition-all ${activeModule === "user" ? "bg-[#FF799C] text-white border-[#FF799C]" : "bg-white/50 border-[#FF799C]/15 hover:bg-white text-[#6E4B55]"}`}
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border transition-all relative ${activeModule === "user" ? "bg-[#FF799C] text-white border-[#FF799C]" : "bg-white/50 border-[#FF799C]/15 hover:bg-white text-[#6E4B55]"}`}
               >
                 <div className="h-5 w-5 sm:h-6 sm:w-6 rounded-full overflow-hidden border border-[#FF799C]/20 bg-white/10 flex items-center justify-center">
                   {currentUser.avatar ? (
@@ -293,6 +317,11 @@ export default function App() {
                 <span className="text-[11px] sm:text-xs text-[#6E4B55]/90 font-medium truncate max-w-[60px] sm:max-w-[80px]">
                   {currentUser.username}
                 </span>
+                {unreadNotifs > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold font-mono border-2 border-[#FFF6F2] shadow-sm animate-bounce">
+                    {unreadNotifs}
+                  </span>
+                )}
               </button>
             ) : (
               <button

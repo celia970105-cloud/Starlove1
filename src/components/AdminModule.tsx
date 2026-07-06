@@ -30,7 +30,7 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
   // Simulated Site Text Configurations
   const [heroTitle, setHeroTitle] = useState("Starry Wish Support Platform");
   const [heroSubtitle, setHeroSubtitle] = useState("星願應援站 - 明星與星光同盟的交界處。");
-  const [bannerUrl, setBannerUrl] = useState("https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200");
+  const [bannerUrl, setBannerUrl] = useState("https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200");
   const [savedTextSuccess, setSavedTextSuccess] = useState(false);
 
   // Customizable area titles and descriptions

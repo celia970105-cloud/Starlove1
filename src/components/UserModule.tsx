@@ -38,6 +38,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
   const [bio, setBio] = useState("");
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState("");
 
   // Social States
   const [socialSubTab, setSocialSubTab] = useState<"submissions" | "favorites" | "notifications">("submissions");
@@ -64,18 +65,18 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
   const [showAlbumForBg, setShowAlbumForBg] = useState(false);
 
   const predefinedAvatars = [
-    "https://api.dicebear.com/7.x/adventurer/svg?seed=Aria",
-    "https://api.dicebear.com/7.x/adventurer/svg?seed=Star",
-    "https://api.dicebear.com/7.x/adventurer/svg?seed=Cosmo",
-    "https://api.dicebear.com/7.x/adventurer/svg?seed=Nebula",
-    "https://api.dicebear.com/7.x/adventurer/svg?seed=Dreamer"
+    "https://api.dicebear.com/7.x/lorelei/svg?seed=Aria&backgroundColor=ffdeeb",
+    "https://api.dicebear.com/7.x/lorelei/svg?seed=Cupcake&backgroundColor=ffe3ec",
+    "https://api.dicebear.com/7.x/lorelei/svg?seed=Mochi&backgroundColor=ffd3e2",
+    "https://api.dicebear.com/7.x/lorelei/svg?seed=Sweetie&backgroundColor=ffb3d1",
+    "https://api.dicebear.com/7.x/lorelei/svg?seed=Cherry&backgroundColor=ffccd5"
   ];
 
   const predefinedBgs = [
-    "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
-    "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1200",
-    "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=1200",
-    "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200"
+    "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
+    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200",
+    "https://images.unsplash.com/photo-1604076913837-52ab5629fba9?w=1200",
+    "https://images.unsplash.com/photo-1533158326339-7f3cf2404354?w=1200"
   ];
 
   useEffect(() => {
@@ -382,13 +383,65 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
     }
   };
 
+  const saveProfileSetting = async (field: "avatar" | "background", value: string) => {
+    if (!currentUser) return;
+    
+    // Optimistically update
+    if (field === "avatar") {
+      setNewAvatar(value);
+    } else {
+      setNewBg(value);
+    }
+
+    setAutoSaveStatus("儲存中... ✦");
+
+    try {
+      const res = await fetch("/api/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          [field]: value
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onLoginSuccess(data.user);
+        saveUserBackup(data.user);
+        
+        if (field === "avatar") {
+          setNewAvatar(data.user.avatar);
+        } else {
+          setNewBg(data.user.background);
+        }
+        setAutoSaveStatus("已自動儲存 💖");
+        setTimeout(() => setAutoSaveStatus(""), 2500);
+      } else {
+        // Local fallback
+        const updatedUser = { ...currentUser, [field]: value };
+        onLoginSuccess(updatedUser);
+        saveUserBackup(updatedUser);
+        setAutoSaveStatus("已儲存至瀏覽器 ✨");
+        setTimeout(() => setAutoSaveStatus(""), 2500);
+      }
+    } catch (err) {
+      console.error(`Error auto-saving ${field}:`, err);
+      const updatedUser = { ...currentUser, [field]: value };
+      onLoginSuccess(updatedUser);
+      saveUserBackup(updatedUser);
+      setAutoSaveStatus("已儲存至瀏覽器 ✨");
+      setTimeout(() => setAutoSaveStatus(""), 2500);
+    }
+  };
+
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === "string") {
-          setNewAvatar(reader.result);
+          saveProfileSetting("avatar", reader.result);
         }
       };
       reader.readAsDataURL(file);
@@ -401,7 +454,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === "string") {
-          setNewBg(reader.result);
+          saveProfileSetting("background", reader.result);
         }
       };
       reader.readAsDataURL(file);
@@ -609,7 +662,10 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                 {/* Predefined Avatars Selector & Album selection option */}
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-xs font-mono text-[#6E4B55]/70">個人頭像 (支援手機內建相簿)</label>
+                    <label className="block text-xs font-mono text-[#6E4B55]/70 flex items-center gap-1">
+                      個人頭像 (支援手機內建相簿)
+                      {autoSaveStatus && <span className="text-[#FF799C] font-semibold animate-pulse text-[10px] ml-1">{autoSaveStatus}</span>}
+                    </label>
                     <div className="flex gap-2">
                       <label className="text-[10px] font-semibold text-[#FF799C] hover:underline cursor-pointer flex items-center gap-1 bg-[#FF799C]/5 border border-[#FF799C]/20 px-2 py-1 rounded-lg">
                         📱 選擇手機相簿
@@ -635,7 +691,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                   
                   {showAlbumForAvatar ? (
                     <div className="bg-[#FFF6F2]/70 border border-[#FF799C]/15 rounded-xl p-3 mb-3">
-                      <p className="text-[10px] text-[#6E4B55]/60 mb-2 font-mono">點擊應援照片設為頭貼：</p>
+                      <p className="text-[10px] text-[#6E4B55]/60 mb-2 font-mono">點擊應援照片設為頭貼 (點選後自動儲存)：</p>
                       {galleryPhotos.length === 0 ? (
                         <p className="text-xs text-[#6E4B55]/50 py-3 text-center">目前相簿尚無上傳相片 🌸</p>
                       ) : (
@@ -644,7 +700,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                             <button
                               type="button"
                               key={photo.id}
-                              onClick={() => setNewAvatar(photo.image_url)}
+                              onClick={() => saveProfileSetting("avatar", photo.image_url)}
                               className={`aspect-square rounded-lg overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 cursor-pointer ${newAvatar === photo.image_url ? "border-[#FF799C] scale-105 ring-2 ring-[#FF799C]/20" : "border-[#FF799C]/10 opacity-70 hover:opacity-100"}`}
                               title={photo.title}
                             >
@@ -668,7 +724,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                           <button
                             type="button"
                             key={url}
-                            onClick={() => setNewAvatar(url)}
+                            onClick={() => saveProfileSetting("avatar", url)}
                             className={`h-9 w-9 rounded-full overflow-hidden border-2 transition-all active:scale-95 cursor-pointer ${newAvatar === url ? "border-[#FF799C] scale-105" : "border-[#FF799C]/15 opacity-75 hover:opacity-100"}`}
                           >
                             <img src={url} alt="avatar" className="h-full w-full" />
@@ -682,7 +738,10 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                 {/* Predefined Header Cover selector & Album selection option */}
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-xs font-mono text-[#6E4B55]/70">星空背景面板 (支援手機內建相簿)</label>
+                    <label className="block text-xs font-mono text-[#6E4B55]/70 flex items-center gap-1">
+                      星空背景面板 (支援手機內建相簿)
+                      {autoSaveStatus && <span className="text-[#FF799C] font-semibold animate-pulse text-[10px] ml-1">{autoSaveStatus}</span>}
+                    </label>
                     <div className="flex gap-2">
                       <label className="text-[10px] font-semibold text-[#FF799C] hover:underline cursor-pointer flex items-center gap-1 bg-[#FF799C]/5 border border-[#FF799C]/20 px-2 py-1 rounded-lg">
                         📱 選擇手機相簿
@@ -708,7 +767,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                   
                   {showAlbumForBg ? (
                     <div className="bg-[#FFF6F2]/70 border border-[#FF799C]/15 rounded-xl p-3 mb-3">
-                      <p className="text-[10px] text-[#6E4B55]/60 mb-2 font-mono">點擊應援照片設為背景：</p>
+                      <p className="text-[10px] text-[#6E4B55]/60 mb-2 font-mono">點擊應援照片設為背景 (點選後自動儲存)：</p>
                       {galleryPhotos.length === 0 ? (
                         <p className="text-xs text-[#6E4B55]/50 py-3 text-center">目前相簿尚無上傳相片 🌸</p>
                       ) : (
@@ -717,7 +776,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                             <button
                               type="button"
                               key={photo.id}
-                              onClick={() => setNewBg(photo.image_url)}
+                              onClick={() => saveProfileSetting("background", photo.image_url)}
                               className={`h-12 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 cursor-pointer ${newBg === photo.image_url ? "border-[#FF799C] scale-105 ring-2 ring-[#FF799C]/20" : "border-[#FF799C]/10 opacity-70 hover:opacity-100"}`}
                               title={photo.title}
                             >
@@ -733,7 +792,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                         <button
                           type="button"
                           key={url}
-                          onClick={() => setNewBg(url)}
+                          onClick={() => saveProfileSetting("background", url)}
                           className={`h-10 rounded-xl overflow-hidden border-2 transition-all active:scale-95 relative cursor-pointer ${newBg === url ? "border-[#FF799C] scale-[1.03]" : "border-[#FF799C]/15 opacity-60"}`}
                         >
                           <img src={url} alt="cover" className="h-full w-full object-cover" />

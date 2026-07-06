@@ -15,8 +15,8 @@ const SEED_DATA = {
       email: "celia970105@gmail.com",
       password: "Aa0955283881",
       role: "admin",
-      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=celia",
-      background: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=celia&backgroundColor=ffdeeb",
+      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
       star_coins: 100
     },
     {
@@ -25,8 +25,8 @@ const SEED_DATA = {
       email: "zack@starry.com",
       password: "password123",
       role: "user",
-      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Zack",
-      background: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=Zack&backgroundColor=ffe3ec",
+      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
       star_coins: 100
     },
     {
@@ -35,8 +35,8 @@ const SEED_DATA = {
       email: "jeremy@starry.com",
       password: "password123",
       role: "user",
-      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Jeremy",
-      background: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=Jeremy&backgroundColor=ffd3e2",
+      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
       star_coins: 100
     },
     {
@@ -45,8 +45,8 @@ const SEED_DATA = {
       email: "star@starry.com",
       password: "password123",
       role: "user",
-      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Star",
-      background: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=Star&backgroundColor=ffb3d1",
+      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
       star_coins: 100
     }
   ],
@@ -948,8 +948,8 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         email: cleanEmail,
         password: cleanPassword,
         role: isFirstAdmin ? "admin" : "user",
-        avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${cleanUsername}`,
-        background: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+        avatar: `https://api.dicebear.com/7.x/lorelei/svg?seed=${cleanUsername}&backgroundColor=ffdeeb`,
+        background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
         star_coins: 100
       };
 
@@ -1081,8 +1081,8 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           email: cleanEmail,
           password: password,
           role: "user",
-          avatar: avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${username}`,
-          background: background || "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200",
+          avatar: avatar || `https://api.dicebear.com/7.x/lorelei/svg?seed=${username}&backgroundColor=ffdeeb`,
+          background: background || "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
           star_coins: star_coins !== undefined ? star_coins : 100,
           solo_pet: solo_pet || null
         };

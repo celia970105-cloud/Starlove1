@@ -30,7 +30,7 @@ export default function App() {
   // Custom configurations from admin settings
   const [heroTitle, setHeroTitle] = useState("ALL FOR JIYU");
   const [heroSub, setHeroSub] = useState("ALL FOR JIYU - 專屬 Jiyu 的最可愛奢華應援星空社群平台。結合投稿審核、黑膠音樂播放、同人畫作展覽及星寵互動。");
-  const [bannerUrl, setBannerUrl] = useState("https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=1200");
+  const [bannerUrl, setBannerUrl] = useState("https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200");
 
   const [galleryTitle, setGalleryTitle] = useState("圖片相簿");
   const [galleryDesc, setGalleryDesc] = useState("珍藏高清直拍舞台照");

@@ -184,7 +184,7 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       }
     }
   } catch (err) {
-    console.error(`Supabase write failed for key ${key}:`, err);
+    console.warn(`Supabase write failed for key ${key}:`, err);
   }
 }
 
@@ -274,9 +274,23 @@ export async function uploadBase64ToStorage(base64: string): Promise<string> {
 
 // Mock Fetch Router implementation to route all API requests straight to Supabase state rows!
 export async function handleSupabaseApiCall(url: string, init?: RequestInit): Promise<Response> {
-  const pathParts = url.replace(/^\/api\//, "").split("/");
+  const urlObj = new URL(url, window.location.origin);
+  const pathname = urlObj.pathname;
+  const pathParts = pathname.replace(/^\/api\//, "").split("/");
   const method = init?.method || "GET";
-  const body = init?.body ? JSON.parse(init.body as string) : null;
+  
+  let body: any = null;
+  if (init?.body) {
+    if (typeof init.body === "string") {
+      try {
+        body = JSON.parse(init.body);
+      } catch (e) {
+        console.warn("handleSupabaseApiCall: Failed to parse request body as JSON:", e);
+      }
+    } else {
+      body = init.body;
+    }
+  }
 
   // Simple Mock helper
   const jsonResponse = (data: any, status = 200) => {
@@ -1941,7 +1955,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
     return jsonResponse({ error: `Route not found: ${url}` }, 404);
   } catch (err: any) {
-    console.error("Supabase API Interceptor crashed:", err);
+    console.warn("Supabase API Interceptor crashed:", err);
     return jsonResponse({ error: "Internal Server Error", message: err?.message || String(err) }, 500);
   }
 }

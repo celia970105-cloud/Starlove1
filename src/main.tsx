@@ -11,8 +11,15 @@ try {
   Object.defineProperty(window, 'fetch', {
     value: async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : (input as Request).url;
-      if (url.startsWith("/api/")) {
-        return handleSupabaseApiCall(url, init);
+      try {
+        const urlObj = new URL(url, window.location.origin);
+        if (urlObj.pathname.startsWith("/api/")) {
+          return handleSupabaseApiCall(url, init);
+        }
+      } catch (err) {
+        if (url.startsWith("/api/")) {
+          return handleSupabaseApiCall(url, init);
+        }
       }
       return originalFetch(input, init);
     },
@@ -24,13 +31,20 @@ try {
   try {
     (window as any).fetch = async (input: any, init: any) => {
       const url = typeof input === "string" ? input : (input as Request).url;
-      if (url.startsWith("/api/")) {
-        return handleSupabaseApiCall(url, init);
+      try {
+        const urlObj = new URL(url, window.location.origin);
+        if (urlObj.pathname.startsWith("/api/")) {
+          return handleSupabaseApiCall(url, init);
+        }
+      } catch (err) {
+        if (url.startsWith("/api/")) {
+          return handleSupabaseApiCall(url, init);
+        }
       }
       return originalFetch(input, init);
     };
   } catch (err) {
-    console.error("Critical: Could not intercept fetch:", err);
+    console.warn("Critical: Could not intercept fetch:", err);
   }
 }
 

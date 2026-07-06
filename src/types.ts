@@ -17,6 +17,8 @@ export interface User {
     furniture: any[];
     fridge: Record<string, number>;
     custom_skin: string;
+    level?: number;
+    exp?: number;
   };
 }
 

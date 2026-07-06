@@ -138,6 +138,7 @@ export default function VideoModule({ currentUser, onRefreshData }: VideoModuleP
       });
 
       if (res.ok) {
+        const data = await res.json();
         setSubmitSuccess(true);
         setTitle("");
         setVideoUrl("");
@@ -149,6 +150,11 @@ export default function VideoModule({ currentUser, onRefreshData }: VideoModuleP
         }
         if (onRefreshData) {
           onRefreshData();
+        }
+        if (data.coinMessage) {
+          setTimeout(() => {
+            alert(data.coinMessage);
+          }, 300);
         }
         setTimeout(() => {
           setShowForm(false);

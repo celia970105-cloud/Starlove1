@@ -119,6 +119,7 @@ export default function LettersModule({ currentUser, onRefreshData }: LettersMod
       });
 
       if (res.ok) {
+        const data = await res.json();
         setSubmitSuccess(true);
         setContent("");
         setIsAnonymous(false);
@@ -127,6 +128,11 @@ export default function LettersModule({ currentUser, onRefreshData }: LettersMod
         }
         if (onRefreshData) {
           onRefreshData();
+        }
+        if (data.coinMessage) {
+          setTimeout(() => {
+            alert(data.coinMessage);
+          }, 300);
         }
         setTimeout(() => {
           setShowWriteModal(false);

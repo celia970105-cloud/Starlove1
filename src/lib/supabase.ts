@@ -1180,6 +1180,35 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       if (!payload) {
         return jsonResponse({ error: "Payload is required" }, 400);
       }
+      
+      const userId = payload.user_id || "anonymous";
+      let earnedCoins = 0;
+      let coinMessage = "";
+      
+      if (userId !== "anonymous") {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const users = await getDbKey("users");
+        const uIdx = users.findIndex((u: any) => u.id === userId);
+        if (uIdx !== -1) {
+          if (!users[uIdx].daily_post_coins) {
+            users[uIdx].daily_post_coins = {};
+          }
+          const currentCount = users[uIdx].daily_post_coins[todayStr] || 0;
+          if (currentCount < 3) {
+            earnedCoins = 50; // 每次投稿給 50 星星幣
+            users[uIdx].star_coins = (users[uIdx].star_coins || 0) + earnedCoins;
+            if (users[uIdx].solo_pet) {
+              users[uIdx].solo_pet.coins = (users[uIdx].solo_pet.coins || 0) + earnedCoins;
+            }
+            users[uIdx].daily_post_coins[todayStr] = currentCount + 1;
+            await setDbKey("users", users);
+            coinMessage = `🎉 投稿成功！獲得星星幣 +${earnedCoins} 🪙 (今日已獲幣投稿 ${currentCount + 1}/3 次)。`;
+          } else {
+            coinMessage = `✨ 投稿成功！今日投稿獲取星星幣已達上限 (3/3)，你對 Jiyu 的愛意已深深載入星宿！💖`;
+          }
+        }
+      }
+
       const isUserAdmin = payload.role === "admin" || (payload.email && payload.email === "celia970105@gmail.com");
       const newPostId = `${type.substring(0, 1)}_${Date.now()}`;
       const basePost = {
@@ -1203,7 +1232,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
-        return jsonResponse({ success: true, post });
+        return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
       if (type === "videos") {
@@ -1215,7 +1244,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
-        return jsonResponse({ success: true, post });
+        return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
       if (type === "letters") {
@@ -1228,7 +1257,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
-        return jsonResponse({ success: true, post });
+        return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
       if (type === "artworks") {
@@ -1242,7 +1271,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
-        return jsonResponse({ success: true, post });
+        return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
 
       if (type === "music") {
@@ -1270,7 +1299,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
-        return jsonResponse({ success: true, post });
+        return jsonResponse({ success: true, post, earnedCoins, coinMessage });
       }
     }
 

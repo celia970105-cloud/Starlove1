@@ -91,6 +91,7 @@ export default function MuseumModule({ currentUser, onRefreshData }: MuseumModul
       });
 
       if (res.ok) {
+        const data = await res.json();
         setSubmitSuccess(true);
         setTitle("");
         setImageUrl("");
@@ -100,6 +101,11 @@ export default function MuseumModule({ currentUser, onRefreshData }: MuseumModul
         }
         if (onRefreshData) {
           onRefreshData();
+        }
+        if (data.coinMessage) {
+          setTimeout(() => {
+            alert(data.coinMessage);
+          }, 300);
         }
         setTimeout(() => {
           setShowForm(false);

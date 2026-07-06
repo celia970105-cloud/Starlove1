@@ -477,6 +477,7 @@ export default function MusicPlayer({ currentUser, onRefreshData }: MusicPlayerP
       });
 
       if (res.ok) {
+        const data = await res.json();
         setSubmitSuccess(true);
         setNewTitle("");
         setNewArtist("");
@@ -488,6 +489,11 @@ export default function MusicPlayer({ currentUser, onRefreshData }: MusicPlayerP
         
         if (onRefreshData) {
           onRefreshData();
+        }
+        if (data.coinMessage) {
+          setTimeout(() => {
+            alert(data.coinMessage);
+          }, 300);
         }
         setTimeout(() => {
           setShowSubmitModal(false);

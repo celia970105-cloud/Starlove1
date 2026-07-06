@@ -98,6 +98,43 @@ interface FurnitureItem {
   description: string;
 }
 
+interface ShopFurnitureItem {
+  id: string;
+  name: string;
+  cost: number;
+  description: string;
+  vibe: string;
+}
+
+const SHOP_FURNITURE_TEMPLATES: ShopFurnitureItem[] = [
+  { id: "table", name: "蜜桃蝴蝶結小圓桌", cost: 80, description: "擺放著櫻桃小甜點的雙層粉紅蕾絲邊圓桌", vibe: "Cute" },
+  { id: "wardrobe", name: "櫻花公主旋轉衣櫥", cost: 180, description: "散發粉紅亮粉的魔幻衣櫥，可以收納漂亮的配件", vibe: "Princess" },
+  { id: "piano", name: "星光水晶迷你鋼琴", cost: 380, description: "用透明水晶打造的粉嫩鋼琴，彈奏時會發出流星雨音效", vibe: "Elegant" },
+  { id: "tv", name: "草莓波點復古小電視", cost: 680, description: "外殼是可愛草莓造型的舊式天線電視，播放著應援回憶錄", vibe: "Retro" },
+  { id: "castle", name: "璀璨极禹星空城堡", cost: 1200, description: "超級奢華的雙層粉色星光小城堡，是全宇宙最高貴的玩具", vibe: "Dreamy" }
+];
+
+interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  targetType: "posts" | "feed_pet" | "buy_furniture" | "pet_level" | "friend_visit";
+  targetValue: number;
+  rewardCoins: number;
+  icon: string;
+}
+
+const ACHIEVEMENTS_LIST: Achievement[] = [
+  { id: "FIRST_POST", title: "初次發射星光", description: "發布 1 次應援投稿（照片、影片、信件、畫作或音樂）", targetType: "posts", targetValue: 1, rewardCoins: 100, icon: "🌠" },
+  { id: "POST_MASTER", title: "璀璨應援大使", description: "累計發布 5 次應援投稿", targetType: "posts", targetValue: 5, rewardCoins: 300, icon: "👑" },
+  { id: "FEED_STARTER", title: "愛心小幫手", description: "餵食星寵 5 次", targetType: "feed_pet", targetValue: 5, rewardCoins: 120, icon: "🍰" },
+  { id: "FEED_EXPERT", title: "萌星小廚神", description: "餵食星寵 15 次", targetType: "feed_pet", targetValue: 15, rewardCoins: 250, icon: "👩‍🍳" },
+  { id: "DECORATOR", title: "夢幻設計師", description: "購買或擁有 8 件家具", targetType: "buy_furniture", targetValue: 8, rewardCoins: 200, icon: "🎀" },
+  { id: "LEVEL_UPPER", title: "萌星培育專家", description: "星寵等級達到 3 級", targetType: "pet_level", targetValue: 3, rewardCoins: 150, icon: "⭐" },
+  { id: "PET_MASTER", title: "宇宙級巨星萌伴", description: "星寵等級達到 5 級", targetType: "pet_level", targetValue: 5, rewardCoins: 400, icon: "🌌" },
+  { id: "SOCIAL_BUTTERFLY", title: "交友廣闊", description: "與好友進行拜訪互動 5 次", targetType: "friend_visit", targetValue: 5, rewardCoins: 150, icon: "🤝" }
+];
+
 const DEFAULT_FURNITURE: FurnitureItem[] = [
   { id: "bed", name: "棉花糖蓬蓬床", x: 20, y: 150, description: "圓潤香甜的草莓棉花糖大床" },
   { id: "sofa", name: "蜜桃雲朵沙發", x: 190, y: 160, description: "像雲朵般舒適的圓角粉紅小沙發" },
@@ -192,6 +229,72 @@ const FURNITURE_SVGS: Record<string, React.ReactNode> = {
       <path d="M 22 30 Q 31 38 40 30 Q 49 38 58 30 Q 64 36 58 30" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
       <rect x="36" y="22" width="8" height="6" rx="2.5" fill="#FF799C" />
       <path d="M 44 23 A 2.5 2.5 0 0 1 44 27" fill="none" stroke="#FF799C" strokeWidth="1.5" />
+    </svg>
+  ),
+  wardrobe: (
+    <svg width="50" height="70" viewBox="0 0 70 100" className="filter drop-shadow-md">
+      <rect x="5" y="5" width="60" height="90" rx="12" fill="#FFAEC9" stroke="#FF799C" strokeWidth="2" />
+      <line x1="35" y1="5" x2="35" y2="95" stroke="#FF799C" strokeWidth="1.5" />
+      <circle cx="28" cy="50" r="4" fill="#FFF" />
+      <circle cx="42" cy="50" r="4" fill="#FFF" />
+      <circle cx="28" cy="50" r="2" fill="#FF4B72" />
+      <circle cx="42" cy="50" r="2" fill="#FF4B72" />
+      <rect x="15" y="75" width="40" height="12" rx="4" fill="#FFF0F5" stroke="#FFB7CE" />
+      <circle cx="35" cy="81" r="2" fill="#FF799C" />
+      <path d="M 12 15 Q 35 10 58 15" stroke="#FFF" strokeWidth="1.5" fill="none" opacity="0.6" />
+    </svg>
+  ),
+  piano: (
+    <svg width="65" height="55" viewBox="0 0 90 80" className="filter drop-shadow-md">
+      <rect x="10" y="20" width="70" height="35" rx="8" fill="#D2E4FF" stroke="#A3C2F7" strokeWidth="2" />
+      <rect x="10" y="48" width="70" height="15" rx="3" fill="#FFF" stroke="#A3C2F7" strokeWidth="1.5" />
+      <line x1="18" y1="48" x2="18" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="26" y1="48" x2="26" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="34" y1="48" x2="34" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="42" y1="48" x2="42" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="50" y1="48" x2="50" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="58" y1="48" x2="58" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="66" y1="48" x2="66" y2="63" stroke="#DDD" strokeWidth="1" />
+      <line x1="74" y1="48" x2="74" y2="63" stroke="#DDD" strokeWidth="1" />
+      <rect x="21" y="48" width="4" height="9" fill="#2E1834" />
+      <rect x="29" y="48" width="4" height="9" fill="#2E1834" />
+      <rect x="45" y="48" width="4" height="9" fill="#2E1834" />
+      <rect x="53" y="48" width="4" height="9" fill="#2E1834" />
+      <rect x="61" y="48" width="4" height="9" fill="#2E1834" />
+      <path d="M 12 20 Q 45 5 78 20" fill="none" stroke="#FFF" strokeWidth="2.5" opacity="0.7" />
+      <rect x="25" y="63" width="40" height="8" rx="2" fill="#A3C2F7" />
+      <line x1="15" y1="55" x2="10" y2="75" stroke="#A3C2F7" strokeWidth="3" />
+      <line x1="75" y1="55" x2="80" y2="75" stroke="#A3C2F7" strokeWidth="3" />
+    </svg>
+  ),
+  tv: (
+    <svg width="60" height="50" viewBox="0 0 80 70" className="filter drop-shadow-md">
+      <rect x="5" y="15" width="70" height="48" rx="10" fill="#FFB7CE" stroke="#FF799C" strokeWidth="2" />
+      <rect x="12" y="21" width="45" height="36" rx="6" fill="#FFF0F5" stroke="#FFCCD9" strokeWidth="1" />
+      <circle cx="67" cy="27" r="3" fill="#FF4B72" />
+      <circle cx="67" cy="37" r="3" fill="#FF4B72" />
+      <rect x="63" y="45" width="8" height="10" rx="1" fill="#FF799C" opacity="0.5" />
+      <path d="M 20 45 Q 35 25 50 45 Z" fill="#FFAEC9" opacity="0.6" />
+      <circle cx="35" cy="30" r="3" fill="#FFEB3B" />
+      <line x1="40" y1="15" x2="25" y2="5" stroke="#FF799C" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="40" y1="15" x2="55" y2="5" stroke="#FF799C" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="25" cy="5" r="2.5" fill="#FF4B72" />
+      <circle cx="55" cy="5" r="2.5" fill="#FF4B72" />
+    </svg>
+  ),
+  castle: (
+    <svg width="85" height="75" viewBox="0 0 110 100" className="filter drop-shadow-md">
+      <rect x="25" y="40" width="60" height="50" rx="4" fill="#FFC2D1" stroke="#FF799C" strokeWidth="2" />
+      <rect x="15" y="25" width="18" height="65" fill="#FFAEC9" stroke="#FF799C" strokeWidth="1.5" />
+      <rect x="77" y="25" width="18" height="65" fill="#FFAEC9" stroke="#FF799C" strokeWidth="1.5" />
+      <polygon points="12,25 24,5 36,25" fill="#FF799C" />
+      <polygon points="74,25 86,5 98,25" fill="#FF799C" />
+      <polygon points="40,40 55,15 70,40" fill="#FF4B72" />
+      <path d="M 45 90 A 10 10 0 0 1 65 90 Z" fill="#FFF0F5" stroke="#FF799C" strokeWidth="1.5" />
+      <rect x="20" y="40" width="8" height="12" rx="2" fill="#FFF" />
+      <rect x="82" y="40" width="8" height="12" rx="2" fill="#FFF" />
+      <circle cx="55" cy="55" r="4" fill="#FFEB3B" className="animate-pulse" />
+      <path d="M 50 40 L 60 40 M 55 35 L 55 45" stroke="#FFF" strokeWidth="1" />
     </svg>
   )
 };
@@ -288,6 +391,41 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     return "";
   });
 
+  // Level & EXP for solo pet
+  const [soloLevel, setSoloLevel] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const v = localStorage.getItem(`${localKey}_level`);
+      return v ? parseInt(v, 10) : 1;
+    }
+    return 1;
+  });
+  const [soloExp, setSoloExp] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const v = localStorage.getItem(`${localKey}_exp`);
+      return v ? parseInt(v, 10) : 0;
+    }
+    return 0;
+  });
+
+  // Shop & Achievements Overlays
+  const [isShopOpen, setIsShopOpen] = useState(false);
+  const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
+
+  // Achievements State
+  const [achievementsState, setAchievementsState] = useState<Record<string, { progress: number, claimed: boolean }>>(() => {
+    if (typeof window !== "undefined") {
+      const v = localStorage.getItem(`starry_ach_progress_${currentUser?.id || "guest"}`);
+      if (v) {
+        try { return JSON.parse(v); } catch (e) {}
+      }
+    }
+    const initial: Record<string, { progress: number, claimed: boolean }> = {};
+    ACHIEVEMENTS_LIST.forEach(ach => {
+      initial[ach.id] = { progress: 0, claimed: false };
+    });
+    return initial;
+  });
+
   // Co-parenting full-stack state
   const [coparentGroups, setCoparentGroups] = useState<any[]>([]);
   const [activeGroup, setActiveGroup] = useState<any | null>(null);
@@ -358,6 +496,8 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
       if (pet.furniture) setSoloFurniture(pet.furniture);
       if (pet.fridge) setSoloFridgeFood(pet.fridge);
       if (pet.custom_skin !== undefined) setSoloCustomSkin(pet.custom_skin);
+      if (pet.level !== undefined) setSoloLevel(pet.level);
+      if (pet.exp !== undefined) setSoloExp(pet.exp);
     } else {
       // Fetch local storage fallback if they were a guest, or set defaults
       const savedName = localStorage.getItem(`${localKey}_name`);
@@ -369,6 +509,10 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
         if (savedLove) setSoloLove(parseInt(savedLove, 10));
         const savedCoins = localStorage.getItem(`${localKey}_coins`);
         if (savedCoins) setSoloCoins(parseInt(savedCoins, 10));
+        const savedLevel = localStorage.getItem(`${localKey}_level`);
+        if (savedLevel) setSoloLevel(parseInt(savedLevel, 10));
+        const savedExp = localStorage.getItem(`${localKey}_exp`);
+        if (savedExp) setSoloExp(parseInt(savedExp, 10));
         const savedFurniture = localStorage.getItem(`${localKey}_furniture`);
         if (savedFurniture) {
           try { setSoloFurniture(JSON.parse(savedFurniture)); } catch (e) {}
@@ -382,6 +526,192 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
       }
     }
   }, [currentUser?.id, localKey]);
+
+  // Sync solo_pet extra stats to localstorage
+  useEffect(() => {
+    localStorage.setItem(`${localKey}_level`, soloLevel.toString());
+    localStorage.setItem(`${localKey}_exp`, soloExp.toString());
+  }, [localKey, soloLevel, soloExp]);
+
+  // Fetch total user posts to sync achievements
+  useEffect(() => {
+    if (!currentUser) return;
+    const checkPostsAndSync = async () => {
+      try {
+        let total = 0;
+        const endpoints = ["photos", "videos", "letters", "artworks", "music"];
+        for (const ep of endpoints) {
+          const res = await fetch(`/api/posts/${ep}`);
+          if (res.ok) {
+            const list = await res.json();
+            const userPosts = list.filter((p: any) => p.user_id === currentUser.id);
+            total += userPosts.length;
+          }
+        }
+        updateAchievementProgress("posts", total);
+      } catch (err) {
+        console.error("Failed to fetch user posts for achievements", err);
+      }
+    };
+    checkPostsAndSync();
+  }, [currentUser?.id]);
+
+  // Pet Raising raising functions
+  const addSoloExp = (amount: number) => {
+    let newExp = soloExp + amount;
+    let newLevel = soloLevel;
+    const expNeeded = soloLevel * 100; // 每一級需要 level * 100 經驗值，越來越有挑戰性！
+    if (newExp >= expNeeded) {
+      newExp -= expNeeded;
+      newLevel += 1;
+      alert(`🎉 恭喜！你的星寵「${soloPetName}」升級到 Lv.${newLevel} 了！🌟 新形象新光芒！`);
+      updateAchievementProgress("pet_level", newLevel);
+    }
+    setSoloExp(newExp);
+    setSoloLevel(newLevel);
+    
+    // Immediate save sync to cloud
+    if (currentUser) {
+      const updatedPet = {
+        name: soloPetName,
+        fullness: soloFullness,
+        love: soloLove,
+        coins: soloCoins,
+        furniture: soloFurniture,
+        fridge: soloFridgeFood,
+        custom_skin: soloCustomSkin,
+        level: newLevel,
+        exp: newExp
+      };
+      fetch("/api/users/save-solo-pet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, solo_pet: updatedPet })
+      });
+    }
+  };
+
+  const updateAchievementProgress = (
+    targetType: "posts" | "feed_pet" | "buy_furniture" | "pet_level" | "friend_visit",
+    value: number,
+    isIncrement = false
+  ) => {
+    setAchievementsState(prev => {
+      const next = { ...prev };
+      let changed = false;
+      ACHIEVEMENTS_LIST.forEach(ach => {
+        if (ach.targetType === targetType) {
+          const state = next[ach.id] || { progress: 0, claimed: false };
+          let newProgress = isIncrement ? state.progress + value : value;
+          if (newProgress > ach.targetValue) newProgress = ach.targetValue;
+          if (newProgress !== state.progress) {
+            next[ach.id] = { ...state, progress: newProgress };
+            changed = true;
+          }
+        }
+      });
+      if (changed) {
+        localStorage.setItem(`starry_ach_progress_${currentUser?.id || "guest"}`, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const claimAchievementReward = (achId: string) => {
+    const ach = ACHIEVEMENTS_LIST.find(a => a.id === achId);
+    if (!ach) return;
+    const state = achievementsState[achId];
+    if (!state || state.progress < ach.targetValue || state.claimed) return;
+
+    const reward = ach.rewardCoins;
+    const newCoins = soloCoins + reward;
+    setSoloCoins(newCoins);
+    localStorage.setItem(`${localKey}_coins`, String(newCoins));
+
+    setAchievementsState(prev => {
+      const next = {
+        ...prev,
+        [achId]: { ...prev[achId], claimed: true }
+      };
+      localStorage.setItem(`starry_ach_progress_${currentUser?.id || "guest"}`, JSON.stringify(next));
+      return next;
+    });
+
+    alert(`🎉 成功領取成就「${ach.title}」獎勵！獲得星星幣 +${reward} 🪙！`);
+
+    // Sync to server
+    if (currentUser) {
+      const updatedPet = {
+        name: soloPetName,
+        fullness: soloFullness,
+        love: soloLove,
+        coins: newCoins,
+        furniture: soloFurniture,
+        fridge: soloFridgeFood,
+        custom_skin: soloCustomSkin,
+        level: soloLevel,
+        exp: soloExp
+      };
+      fetch("/api/users/save-solo-pet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, solo_pet: updatedPet })
+      });
+    }
+  };
+
+  const handleBuyShopFurniture = (item: ShopFurnitureItem) => {
+    if (soloCoins < item.cost) {
+      alert(`❌ 你的星星幣不夠買「${item.name}」喔！可以透過發布應援投稿或與星寵對話獲得星星幣 🪙！`);
+      return;
+    }
+
+    if (soloFurniture.some(f => f.id === item.id)) {
+      alert(`❌ 你已經擁有「${item.name}」這件家具了，快去房間裡拖曳擺放它吧！🌸`);
+      return;
+    }
+
+    const newCoins = soloCoins - item.cost;
+    const newFurnitureItem: FurnitureItem = {
+      id: item.id,
+      name: item.name,
+      x: 50 + Math.random() * 150,
+      y: 100 + Math.random() * 80,
+      description: item.description
+    };
+    const updatedFurniture = [...soloFurniture, newFurnitureItem];
+
+    setSoloCoins(newCoins);
+    setSoloFurniture(updatedFurniture);
+    localStorage.setItem(`${localKey}_coins`, String(newCoins));
+    localStorage.setItem(`${localKey}_furniture`, JSON.stringify(updatedFurniture));
+
+    // Update Achievements & EXP
+    updateAchievementProgress("buy_furniture", updatedFurniture.length);
+    addSoloExp(50); // 購入家具獲得 50 經驗！
+
+    alert(`🎉 成功購入高檔家具「${item.name}」！已扣除 ${item.cost} 星星幣。新家具已放進房間，可以隨時拖曳移動！✨`);
+
+    // Sync to server
+    if (currentUser) {
+      const updatedPet = {
+        name: soloPetName,
+        fullness: soloFullness,
+        love: soloLove,
+        coins: newCoins,
+        furniture: updatedFurniture,
+        fridge: soloFridgeFood,
+        custom_skin: soloCustomSkin,
+        level: soloLevel,
+        exp: soloExp
+      };
+      fetch("/api/users/save-solo-pet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, solo_pet: updatedPet })
+      });
+    }
+  };
 
   // Debounced cloud synchronization of solo pet
   useEffect(() => {
@@ -399,13 +729,15 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             coins: soloCoins,
             furniture: soloFurniture,
             fridge: soloFridgeFood,
-            custom_skin: soloCustomSkin
+            custom_skin: soloCustomSkin,
+            level: soloLevel,
+            exp: soloExp
           }
         })
       }).catch(err => console.error("Failed to sync solo pet to cloud", err));
     }, 1200);
     return () => clearTimeout(saveTimeout);
-  }, [currentUser?.id, soloPetName, soloFullness, soloLove, soloCoins, soloFurniture, soloFridgeFood, soloCustomSkin]);
+  }, [currentUser?.id, soloPetName, soloFullness, soloLove, soloCoins, soloFurniture, soloFridgeFood, soloCustomSkin, soloLevel, soloExp]);
 
   // Fetch active coparent group member details dynamically
   useEffect(() => {
@@ -691,6 +1023,10 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
       setExpression("glow");
       setIsDancing(true);
 
+      // Add EXP & Achievements
+      addSoloExp(15);
+      updateAchievementProgress("feed_pet", 1, true);
+
       setTimeout(() => {
         setFeedEffect(null);
         setIsDancing(false);
@@ -788,6 +1124,9 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             if (data.visitorCoins !== undefined) {
               setSoloCoins(data.visitorCoins);
             }
+            // Increment achievements and exp
+            updateAchievementProgress("friend_visit", 1, true);
+            addSoloExp(10);
           } else {
             alert(data.error || "互動失敗");
           }
@@ -823,6 +1162,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
     if (activeTab === "single") {
       setSoloLove(prev => Math.min(100, prev + 3));
+      addSoloExp(2);
     } else {
       executeCoparentAction("feed-pet", { foodId: "dummy", fullnessVal: 0, loveVal: 2 }).catch(() => {});
     }
@@ -875,6 +1215,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
     setBubbleText(reply);
     setExpression(nextExpr);
+    addSoloExp(5);
 
     setTimeout(() => {
       setIsDancing(false);
@@ -1235,6 +1576,46 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             )
           )}
         </div>
+        )}
+
+        {activeTab === "single" && (
+          <div className="mt-3.5 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/75 border border-[#FF799C]/20 rounded-[24px] p-4 max-w-2xl w-full mx-auto shadow-xs">
+            {/* Level & EXP Progress */}
+            <div className="flex flex-col items-start w-full sm:w-auto flex-1 px-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs bg-gradient-to-r from-[#FF799C] to-[#FFAEC9] text-white font-black px-2.5 py-0.5 rounded-full shadow-xs">
+                  Lv.{soloLevel}
+                </span>
+                <span className="text-[11px] text-[#6E4B55] font-bold">
+                  {soloPetName} 的經驗值：{soloExp} / {soloLevel * 100}
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden border border-[#FF799C]/10">
+                <motion.div
+                  className="bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, (soloExp / (soloLevel * 100)) * 100)}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                />
+              </div>
+            </div>
+
+            {/* Shop & Achievement Quick Buttons */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                onClick={() => setIsShopOpen(true)}
+                className="bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] hover:opacity-95 text-white font-bold text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+              >
+                <span>🛍️ 家具商店</span>
+              </button>
+              <button
+                onClick={() => setIsAchievementsOpen(true)}
+                className="bg-gradient-to-r from-[#FF9800] to-[#FFC107] hover:opacity-95 text-white font-bold text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+              >
+                <span>🏆 萌星成就</span>
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -2409,6 +2790,202 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                 >
                   {isSendingSnap ? "發送中..." : "確認發送 📸"}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🛍️ FURNITURE SHOP MODAL OVERLAY */}
+      <AnimatePresence>
+        {isShopOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-[#FFF5F7] to-white rounded-[32px] p-6 max-w-lg w-full border-4 border-[#FFCCD9] shadow-2xl relative overflow-hidden text-left"
+            >
+              {/* Cute corner hearts decoration */}
+              <div className="absolute -top-10 -left-10 w-24 h-24 bg-[#FF799C]/10 rounded-full blur-xl" />
+              <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-[#FF9EBA]/15 rounded-full blur-xl" />
+
+              <button
+                type="button"
+                onClick={() => setIsShopOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-[#FF799C] transition-all p-2 rounded-full hover:bg-pink-50 cursor-pointer"
+              >
+                <X className="h-6 w-6" />
+              </button>
+
+              <div className="flex items-center gap-2.5 border-b border-[#FFCCD9]/30 pb-3.5 mb-4">
+                <span className="text-3xl select-none">🛍️</span>
+                <div>
+                  <h3 className="text-lg font-bold text-[#6E4B55] flex items-center gap-1.5">
+                    蜜桃星寵高級家具商店
+                  </h3>
+                  <p className="text-[10px] text-gray-500">
+                    星寵家具越來越貴，但能為房間大幅增加夢幻度，並提供海量經驗值喔！🌸
+                  </p>
+                </div>
+              </div>
+
+              {/* Wallet Balance */}
+              <div className="bg-[#FFF4F7] border border-[#FF799C]/20 p-2.5 rounded-2xl flex justify-between items-center mb-4 text-xs font-bold text-[#6E4B55]">
+                <span>🪙 我的星星幣餘額：</span>
+                <span className="text-sm font-mono text-[#FF799C] flex items-center gap-1">
+                  <Coins className="h-4.5 w-4.5" /> {soloCoins} 🪙
+                </span>
+              </div>
+
+              {/* Product list */}
+              <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
+                {SHOP_FURNITURE_TEMPLATES.map(item => {
+                  const owned = soloFurniture.some(f => f.id === item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${owned ? "bg-gray-50 border-gray-100 opacity-80" : "bg-white border-pink-100 hover:border-[#FF799C]/40 hover:shadow-xs"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-pink-50 rounded-xl flex items-center justify-center shrink-0 border border-pink-100 overflow-hidden">
+                          {FURNITURE_SVGS[item.id] || <span>🎁</span>}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-bold text-[#6E4B55]">{item.name}</h4>
+                            <span className="text-[8px] bg-pink-100 text-[#FF799C] px-1.5 py-0.2 rounded-full font-bold">
+                              {item.vibe}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{item.description}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={owned}
+                        onClick={() => handleBuyShopFurniture(item)}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all shrink-0 cursor-pointer active:scale-95 flex items-center gap-1 ${owned ? "bg-emerald-50 text-emerald-600 border border-emerald-100 cursor-default" : "bg-[#FF799C] text-white hover:opacity-90 shadow-sm"}`}
+                      >
+                        {owned ? (
+                          <span>已置辦 💖</span>
+                        ) : (
+                          <>
+                            <span>置辦</span>
+                            <span className="text-[8px] opacity-90 font-mono">({item.cost}🪙)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="text-center mt-5 text-[8.5px] text-gray-400">
+                💡 家具購入後將直接送入房間中央，您可以<b>滑鼠按住隨意拖曳擺放</b>，發揮你的浪漫創意！✨
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🏆 ACHIEVEMENTS SYSTEM MODAL OVERLAY */}
+      <AnimatePresence>
+        {isAchievementsOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-[#FFFCEF] to-white rounded-[32px] p-6 max-w-lg w-full border-4 border-[#FFE3A5] shadow-2xl relative overflow-hidden text-left"
+            >
+              {/* Gold star decorations */}
+              <div className="absolute -top-10 -right-10 w-24 h-24 bg-yellow-300/10 rounded-full blur-xl" />
+              <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-[#FF9EBA]/10 rounded-full blur-xl" />
+
+              <button
+                type="button"
+                onClick={() => setIsAchievementsOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-amber-500 transition-all p-2 rounded-full hover:bg-amber-50 cursor-pointer"
+              >
+                <X className="h-6 w-6" />
+              </button>
+
+              <div className="flex items-center gap-2.5 border-b border-[#FFE3A5]/40 pb-3.5 mb-4">
+                <span className="text-3xl select-none">🏆</span>
+                <div>
+                  <h3 className="text-lg font-bold text-amber-950 flex items-center gap-1.5">
+                    萌星應援成就榮耀殿堂
+                  </h3>
+                  <p className="text-[10px] text-amber-800/70">
+                    紀錄您與極禹萌寵的溫暖點滴。完成指標可領取海量星星幣，助力星寵快樂成長！💖
+                  </p>
+                </div>
+              </div>
+
+              {/* Achievements Grid List */}
+              <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+                {ACHIEVEMENTS_LIST.map(ach => {
+                  const state = achievementsState[ach.id] || { progress: 0, claimed: false };
+                  const completed = state.progress >= ach.targetValue;
+                  const percent = Math.min(100, (state.progress / ach.targetValue) * 100);
+
+                  return (
+                    <div
+                      key={ach.id}
+                      className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${completed ? (state.claimed ? "bg-amber-50/20 border-amber-100 opacity-80" : "bg-amber-50/50 border-amber-200") : "bg-white border-gray-100"}`}
+                    >
+                      <div className="flex items-start gap-2.5 flex-1 text-left">
+                        <span className="text-2xl shrink-0 mt-0.5 filter drop-shadow-sm select-none">{ach.icon}</span>
+                        <div className="w-full">
+                          <h4 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                            {ach.title}
+                            {completed && !state.claimed && (
+                              <span className="text-[7.5px] bg-red-100 text-red-500 font-extrabold px-1 rounded animate-pulse">
+                                可領取 🪙
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-[9px] text-[#6E4B55]/80 leading-normal mt-0.5">{ach.description}</p>
+                          
+                          {/* Progress bar */}
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="w-24 bg-gray-100 rounded-full h-1.5 border border-amber-100 overflow-hidden">
+                              <div
+                                className="bg-amber-400 h-full rounded-full"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                            <span className="text-[8.5px] font-mono text-gray-400 font-bold">
+                              {state.progress} / {ach.targetValue}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {state.claimed ? (
+                          <span className="text-[10px] text-amber-600 font-bold bg-amber-100/40 px-2.5 py-1 rounded-full">
+                            已達成 ✨
+                          </span>
+                        ) : completed ? (
+                          <button
+                            type="button"
+                            onClick={() => claimAchievementReward(ach.id)}
+                            className="bg-gradient-to-r from-amber-400 to-yellow-400 hover:brightness-105 text-amber-950 font-extrabold text-[10px] px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer animate-bounce"
+                          >
+                            領取 +{ach.rewardCoins}🪙
+                          </button>
+                        ) : (
+                          <div className="text-[8px] text-gray-400 font-bold bg-gray-100 px-2 py-1 rounded-lg">
+                            進行中..
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           </div>

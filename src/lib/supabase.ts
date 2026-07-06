@@ -18,36 +18,6 @@ const SEED_DATA = {
       avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=celia&backgroundColor=ffdeeb",
       background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
       star_coins: 100
-    },
-    {
-      id: "user_zack",
-      username: "ZackLover",
-      email: "zack@starry.com",
-      password: "password123",
-      role: "user",
-      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=Zack&backgroundColor=ffe3ec",
-      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
-      star_coins: 100
-    },
-    {
-      id: "user_jeremy",
-      username: "JeremyFan",
-      email: "jeremy@starry.com",
-      password: "password123",
-      role: "user",
-      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=Jeremy&backgroundColor=ffd3e2",
-      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
-      star_coins: 100
-    },
-    {
-      id: "user_star",
-      username: "MarshmallowStar",
-      email: "star@starry.com",
-      password: "password123",
-      role: "user",
-      avatar: "https://api.dicebear.com/7.x/lorelei/svg?seed=Star&backgroundColor=ffb3d1",
-      background: "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=1200",
-      star_coins: 100
     }
   ],
   posts_photos: [] as any[],
@@ -1730,6 +1700,21 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       }
 
       collection.splice(idx, 1);
+      
+      if (supabase) {
+        try {
+          if (type === "users" || type === "user") {
+            await supabase.from("profiles").delete().eq("id", id);
+          } else if (type === "pets" || type === "pet") {
+            await supabase.from("pets").delete().eq("id", id);
+          } else if (key.startsWith("posts_")) {
+            await supabase.from("posts").delete().eq("id", id);
+          }
+        } catch (e) {
+          console.warn("Direct Supabase delete failed:", e);
+        }
+      }
+
       await setDbKey(key, collection);
       return jsonResponse({ success: true, message: `Successfully deleted ${type} with ID ${id}` });
     }

@@ -40,10 +40,9 @@ const PRESET_STICKERS = [
 ];
 
 const PRESET_FALLBACK_IMAGES = [
-  { url: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500", title: "優雅星寵貓貓" },
-  { url: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500", title: "活力萌寵柴柴" },
-  { url: "https://images.unsplash.com/photo-1535268647977-a403b69fc756?w=500", title: "治癒系小海豹" },
-  { url: "https://images.unsplash.com/photo-1507146426996-ef05306b995a?w=500", title: "軟糯星空幼犬" }
+  { url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23FF799C'/><stop offset='100%25' stop-color='%23FFFFFF'/></linearGradient></defs><rect width='100%25' height='100%25' fill='url(%23g)'/></svg>", title: "粉白夢幻漸層" },
+  { url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'><rect width='100%25' height='100%25' fill='%23FF799C'/><defs><pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'><circle cx='20' cy='20' r='6' fill='%23FFFFFF' opacity='0.45'/></pattern></defs><rect width='100%25' height='100%25' fill='url(%23p)'/></svg>", title: "甜美粉色波點" },
+  { url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'><rect width='100%25' height='100%25' fill='%23FFFFFF'/><defs><pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'><circle cx='20' cy='20' r='6' fill='%23FF799C' opacity='0.35'/></pattern></defs><rect width='100%25' height='100%25' fill='url(%23p)'/></svg>", title: "精緻白色波點" }
 ];
 
 const TEXT_COLORS = [

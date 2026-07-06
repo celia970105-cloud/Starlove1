@@ -549,7 +549,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
   const handleHatchEgg = async () => {
     if (activeTab === "single") {
       if (soloCoins < 200) {
-        alert("❌ 您的星星幣不足 200 🪙！多參與投稿打卡、撫摸星寵或切換家園來賺取吧！✨");
+        triggerInsufficientCoinsModal(200, "孵化幸運萌寵蛋");
         return;
       }
 
@@ -630,7 +630,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     } else if (activeTab === "coparent") {
       if (!activeGroup) return;
       if ((activeGroup.star_coins || 0) < 200) {
-        alert("❌ 您的家庭共享星星幣不足 200 🪙！請投稿分享照片打卡賺取星星幣喔！✨");
+        triggerInsufficientCoinsModal(200, "共同繁衍孵化幸運萌寵蛋");
         return;
       }
 
@@ -752,6 +752,60 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
   const [chatInput, setChatInput] = useState("");
   const [feedEffect, setFeedEffect] = useState<string | null>(null);
   const roomRef = useRef<HTMLDivElement | null>(null);
+
+  // Danmaku Barrage State
+  const [danmakus, setDanmakus] = useState<{ id: string; text: string; color: string }[]>([]);
+
+  // Insufficient Star Coins modal states & trigger
+  const [showCoinGuideModal, setShowCoinGuideModal] = useState(false);
+  const [neededCoinsAmount, setNeededCoinsAmount] = useState(0);
+  const [coinActionContext, setCoinActionContext] = useState("");
+
+  const triggerInsufficientCoinsModal = (needed: number, actionName: string) => {
+    setNeededCoinsAmount(needed);
+    setCoinActionContext(actionName);
+    setShowCoinGuideModal(true);
+  };
+
+  // Convert bubbleText to Danmaku items dynamically
+  useEffect(() => {
+    if (bubbleText) {
+      const newDanmaku = {
+        id: Math.random().toString(),
+        text: bubbleText,
+        color: [
+          "bg-[#FF799C]/10 text-[#FF4B72] border-[#FF799C]/20",
+          "bg-pink-50 text-pink-600 border-pink-100/80",
+          "bg-[#FFF0F4]/90 text-[#FF5B7E] border-[#FF5B7E]/20"
+        ][Math.floor(Math.random() * 3)]
+      };
+      setDanmakus((prev) => [...prev, newDanmaku]);
+
+      // Automatically remove danmaku item after 6 seconds
+      const timer = setTimeout(() => {
+        setDanmakus((prev) => prev.filter((d) => d.id !== newDanmaku.id));
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [bubbleText]);
+
+  // Convert autoConversation to Danmaku items dynamically
+  useEffect(() => {
+    if (autoConversation?.text) {
+      const newDanmaku = {
+        id: Math.random().toString(),
+        text: `【${autoConversation.speakerName}】${autoConversation.text}`,
+        color: "bg-purple-50 text-[#8E44AD] border-purple-100 font-bold"
+      };
+      setDanmakus((prev) => [...prev, newDanmaku]);
+
+      // Automatically remove danmaku item after 6 seconds
+      const timer = setTimeout(() => {
+        setDanmakus((prev) => prev.filter((d) => d.id !== newDanmaku.id));
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoConversation]);
 
   // Sync Solo to localStorage
   useEffect(() => {
@@ -1082,7 +1136,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
   const handleBuyShopFurniture = (item: ShopFurnitureItem) => {
     if (soloCoins < item.cost) {
-      alert(`❌ 你的星星幣不夠買「${item.name}」喔！可以透過發布應援投稿或與星寵對話獲得星星幣 🪙！`);
+      triggerInsufficientCoinsModal(item.cost, `購入高檔家具「${item.name}」`);
       return;
     }
 
@@ -1396,7 +1450,8 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
   const handleBuyFood = async (food: FoodItem) => {
     if (activeTab === "single") {
       if (soloCoins < food.cost) {
-        setFridgeMessage("❌ 星星幣不夠了！陪我聊天或切換共同飼養賺取吧！");
+        setFridgeMessage(`❌ 星星幣不足以購買 ${food.name}！`);
+        triggerInsufficientCoinsModal(food.cost, `採購美味零食「${food.name}」`);
         return;
       }
       setSoloCoins(prev => prev - food.cost);
@@ -1407,6 +1462,11 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
       setFridgeMessage(`🪙 成功購入 ${food.name}，放入冰箱儲藏室！`);
     } else {
       if (!activeGroup) return;
+      if ((activeGroup.star_coins || 0) < food.cost) {
+        setFridgeMessage(`❌ 共享星星幣不足以購買 ${food.name}！`);
+        triggerInsufficientCoinsModal(food.cost, `採購共享美味零食「${food.name}」`);
+        return;
+      }
       try {
         const res = await executeCoparentAction("buy-food", {
           foodId: food.id,
@@ -2253,6 +2313,47 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             </button>
           </div>
 
+          {/* DANMAKU BARRAGE BROADCAST BOARD */}
+          <div className="w-full bg-[#FFF0F4]/40 border border-[#FF799C]/10 rounded-xl p-2.5 mb-3 overflow-hidden relative min-h-[48px] flex flex-col justify-center shadow-xs">
+            <div className="absolute top-1.5 left-2.5 flex items-center gap-1 z-10 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded-full border border-pink-100/50 shadow-2xs scale-90">
+              <span className="text-[9px] font-black text-[#FF799C] flex items-center gap-1 animate-pulse">
+                <span>📢</span> 萌星廣播
+              </span>
+            </div>
+            
+            <div className="relative w-full h-8 overflow-hidden mt-3 pl-2 flex items-center">
+              <AnimatePresence>
+                {danmakus.length === 0 ? (
+                  <motion.div
+                    key="empty-danmaku"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.6 }}
+                    exit={{ opacity: 0 }}
+                    className="text-[10px] text-gray-400 font-medium italic pl-1"
+                  >
+                    寵物房間很安靜，輕輕觸摸星寵或與牠們聊天，聽聽牠們的心聲吧 ✨
+                  </motion.div>
+                ) : (
+                  <div className="flex gap-2 flex-wrap overflow-hidden">
+                    {danmakus.map((d) => (
+                      <motion.div
+                        key={d.id}
+                        initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, x: -20 }}
+                        transition={{ type: "spring", stiffness: 100, damping: 15 }}
+                        className={`text-[10px] font-bold px-3 py-1 rounded-full border shadow-sm flex items-center gap-1.5 whitespace-nowrap ${d.color}`}
+                      >
+                        <span className="text-[10px]">💬</span>
+                        {d.text}
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
           {/* THE DECOR ROOM CONTAINER */}
           <div
             ref={roomRef}
@@ -2357,23 +2458,6 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
               </motion.div>
             ))}
 
-            {/* Bubble Speeches */}
-            <div className="absolute top-2 left-3 z-20 pointer-events-none">
-              <AnimatePresence mode="wait">
-                {showBubble && (
-                  <motion.div
-                    key={bubbleText}
-                    initial={{ scale: 0.8, opacity: 0, y: 10 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.8, opacity: 0, y: -5 }}
-                    className="bg-white/95 border border-[#FF799C]/25 text-[#6E4B55] px-3.5 py-2 rounded-2xl max-w-[200px] shadow-md text-[10px] text-left pointer-events-auto"
-                  >
-                    {bubbleText}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
             {/* THE REDESIGNED EXTREMELY CUTELY ROUNDED PINK COTTON CANDY PET STAR */}
             {(activeTab === "single" || activeTab === "coparent") ? (
               // MULTIPLE PETS CO-HABITATION
@@ -2477,25 +2561,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                       {isFocused && <span className="text-[#FF4B72]">⭐</span>}
                     </div>
 
-                    {/* Speech bubble for individual pet if speaking - positioned safely above so it never obscures the pet itself */}
-                    {((isFocused && showBubble && bubbleText) || (autoConversation && autoConversation.speakerId === p.id)) && (
-                      <div className="absolute top-[-95px] left-1/2 transform -translate-x-1/2 z-40">
-                        <AnimatePresence>
-                          <motion.div
-                            initial={{ scale: 0.8, opacity: 0, y: 5 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.8, opacity: 0, y: -5 }}
-                            className={`bg-white/95 border text-[#6E4B55] px-3.5 py-1.5 rounded-2xl max-w-[170px] shadow-md text-[10px] text-left pointer-events-auto relative whitespace-normal break-words ${autoConversation && autoConversation.speakerId === p.id ? "border-[#FF9EBA] ring-1 ring-[#FF9EBA]/30" : "border-[#FF799C]/25"}`}
-                          >
-                            <span className="font-extrabold text-[#FF799C] mr-1 block text-[8px] uppercase tracking-wide">
-                              {autoConversation && autoConversation.speakerId === p.id ? `${p.name}` : "對話"}
-                            </span>
-                            {autoConversation && autoConversation.speakerId === p.id ? autoConversation.text : bubbleText}
-                            <div className="absolute bottom-[-5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white border-r border-b border-[#FF799C]/25 rotate-45" />
-                          </motion.div>
-                        </AnimatePresence>
-                      </div>
-                    )}
+                    {/* Speech bubble removed from here and moved to non-obstructive Danmaku channel as requested */}
 
                     {/* Main star with dynamic animation */}
                     <motion.div
@@ -3564,6 +3630,98 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
       </div>
       )}
+
+      {/* INSUFFICIENT COINS MODE GUIDE MODAL */}
+      <AnimatePresence>
+        {showCoinGuideModal && (
+          <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[28px] border-4 border-[#FF799C]/40 p-6 max-w-md w-full text-left shadow-2xl relative"
+            >
+              <button
+                onClick={() => setShowCoinGuideModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-[#FF799C] transition-all p-2 hover:bg-gray-100 rounded-full cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-[#FF799C]/15 pb-3 mb-4">
+                <div className="p-2.5 bg-pink-100/60 rounded-full text-pink-500 text-xl animate-bounce">
+                  🪙
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#6E4B55]">溫馨提示：星星幣不足</h3>
+                  <p className="text-[10px] text-gray-400 font-medium">當前嘗試進行：{coinActionContext}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-xs text-[#6E4B55]">
+                <div className="bg-[#FFF6F8] border border-[#FF799C]/15 p-3 rounded-2xl flex items-center justify-between">
+                  <span className="font-bold text-gray-600">您的餘額：</span>
+                  <span className="font-black text-[#FF799C] text-sm flex items-center gap-1">
+                    {activeTab === "single" ? soloCoins : activeGroup?.star_coins ?? 0} 🪙
+                  </span>
+                </div>
+
+                <div className="rounded-2xl border-2 border-dashed border-[#FFC2D1] p-4 bg-[#FFFBFB]/50">
+                  <h4 className="font-bold text-[#FF5B7E] mb-2 flex items-center gap-1 text-[11px]">
+                    ⭐ 快速賺取星星幣攻略：
+                  </h4>
+                  <ul className="space-y-2.5 text-[10.5px] leading-relaxed">
+                    <li className="flex gap-2">
+                      <span className="text-base leading-none">📸</span>
+                      <div>
+                        <strong className="text-[#FF799C] block">每小時傳照打卡任務</strong>
+                        在萌星家園右側點擊「傳照片打卡」，每小時成功分享打卡照片，可立即獲得 <strong className="text-pink-600">+50 星星幣</strong>！
+                      </div>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-base leading-none">💖</span>
+                      <div>
+                        <strong className="text-[#FF799C] block">多與星寵貼貼互動</strong>
+                        點擊、輕輕撫摸、拍打或擁抱萌星家園內的小寵物，或者在對話框內和牠們打字聊天，都會隨機掉落星星幣！
+                      </div>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-base leading-none">👥</span>
+                      <div>
+                        <strong className="text-[#FF799C] block">添加與拜訪好友</strong>
+                        成功添加推薦好友，雙方立即各得 <strong className="text-pink-600">+30 星星幣</strong>。每天去好友小屋探望並陪伴星寵，可額外獲得最高 <strong className="text-pink-600">+16 星星幣</strong>！
+                      </div>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-base leading-none">🏆</span>
+                      <div>
+                        <strong className="text-[#FF799C] block">挑戰日常萌星成就</strong>
+                        點擊下方「萌星成就」，當累計撫摸、餵食、擁有家具次數達標時，即可手動領取海量星星幣獎勵！
+                      </div>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-base leading-none">🔥</span>
+                      <div>
+                        <strong className="text-[#FF799C] block">每日登入活躍結算</strong>
+                        每日登入並在全站進行黑膠聽歌、圖片相冊、黑罐寫信互動，系統自動累計活躍度，每晚 00:00 結算並發放大量星星幣！
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2.5">
+                <button
+                  onClick={() => setShowCoinGuideModal(false)}
+                  className="w-full bg-[#FF799C] hover:bg-[#FF799C]/90 text-white font-bold py-2.5 rounded-2xl text-xs active:scale-[0.98] transition-all cursor-pointer shadow-md text-center"
+                >
+                  好耶，我知道了！去賺星幣 ✨
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* REFRIGERATOR OVERLAY CONTAINER (Sliding Popup Modal) */}
       <AnimatePresence>

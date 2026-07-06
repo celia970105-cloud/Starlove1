@@ -19,6 +19,9 @@ export interface User {
     custom_skin: string;
     level?: number;
     exp?: number;
+    pets?: any[];
+    currentHomeId?: string;
+    focusedPetId?: string;
   };
 }
 

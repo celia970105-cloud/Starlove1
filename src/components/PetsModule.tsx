@@ -90,6 +90,64 @@ const SUGGESTED_FRIENDS = [
   { id: "user_star", username: "MarshmallowStar", avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Star", email: "star@starry.com" }
 ];
 
+interface PetInstance {
+  id: string; // "star" | "pig" | "dog"
+  species: "star" | "pig" | "dog";
+  name: string;
+  level: number;
+  exp: number;
+  fullness: number;
+  love: number;
+  customSkin: string;
+  currentHome: string; // "home_star" | "home_pig" | "home_dog"
+}
+
+const getInitialPets = (localKey: string, legacyName: string, legacyFullness: number, legacyLove: number, legacyLevel: number, legacyExp: number, legacySkin: string): PetInstance[] => {
+  if (typeof window !== "undefined") {
+    const v = localStorage.getItem(`${localKey}_pets_v2`);
+    if (v) {
+      try {
+        const parsed = JSON.parse(v);
+        if (parsed && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error("Error parsing pets list", e);
+      }
+    }
+  }
+
+  // Fallback / Initial Seed: ONLY the Star is owned initially!
+  return [
+    {
+      id: "star",
+      species: "star",
+      name: legacyName || "棉花糖糖",
+      level: legacyLevel || 1,
+      exp: legacyExp || 0,
+      fullness: legacyFullness !== undefined ? legacyFullness : 60,
+      love: legacyLove !== undefined ? legacyLove : 70,
+      customSkin: legacySkin || "",
+      currentHome: "home_star"
+    }
+  ];
+};
+
+const getPetPositionClass = (idx: number, total: number) => {
+  if (total <= 1) {
+    return { left: "50%", transform: "translateX(-50%)" };
+  }
+  if (total === 2) {
+    return idx === 0
+      ? { left: "28%", transform: "translateX(-50%)" }
+      : { left: "72%", transform: "translateX(-50%)" };
+  }
+  // 3 or more pets
+  if (idx === 0) return { left: "20%", transform: "translateX(-50%)" };
+  if (idx === 1) return { left: "50%", transform: "translateX(-50%)" };
+  return { left: "80%", transform: "translateX(-50%)" };
+};
+
 interface FurnitureItem {
   id: string;
   name: string;
@@ -407,6 +465,227 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     return 0;
   });
 
+  // NEW MULTI-PET SYSTEM STATE
+  const [pets, setPets] = useState<PetInstance[]>(() => 
+    getInitialPets(localKey, soloPetName, soloFullness, soloLove, soloLevel, soloExp, soloCustomSkin)
+  );
+  const [currentHomeId, setCurrentHomeId] = useState<"home_star" | "home_pig" | "home_dog">("home_star");
+  const [focusedPetId, setFocusedPetId] = useState<string>("star");
+  const [autoConversation, setAutoConversation] = useState<{ speakerId: string; speakerName: string; text: string } | null>(null);
+
+  // HATCHING SYSTEM STATE
+  const [isHatching, setIsHatching] = useState(false);
+  const [hatchingEggPhase, setHatchingEggPhase] = useState<"egg_idle" | "egg_shake" | "egg_burst" | "egg_reveal">("egg_idle");
+  const [hatchedPet, setHatchedPet] = useState<PetInstance | null>(null);
+
+  // Helper to load a selected pet into active focus states
+  const selectFocusedPet = (petId: string) => {
+    setFocusedPetId(petId);
+    setPets(prev => {
+      const targetPet = prev.find(p => p.id === petId);
+      if (targetPet) {
+        setSoloPetName(targetPet.name);
+        setSoloFullness(targetPet.fullness);
+        setSoloLove(targetPet.love);
+        setSoloLevel(targetPet.level || 1);
+        setSoloExp(targetPet.exp || 0);
+        setSoloCustomSkin(targetPet.customSkin || "");
+        setBubbleText(`你選擇了「${targetPet.name}」！來和牠互動，或者餵牠吃點心吧！✨`);
+      }
+      return prev;
+    });
+  };
+
+  // Helper to get beautiful names
+  const getHomeName = (homeId: string) => {
+    if (homeId === "home_star") return "🌌 夢幻星空房";
+    if (homeId === "home_pig") return "🍓 草莓甜心房";
+    if (homeId === "home_dog") return "🐾 活力萌犬房";
+    return "🏠 溫馨家園";
+  };
+
+  const getSpeciesName = (species: string) => {
+    if (species === "star") return "經典小星星 🌟";
+    if (species === "pig") return "粉萌小蜜豬 🐷";
+    if (species === "dog") return "軟綿小奶犬 🐶";
+    return "神祕萌星寵 👾";
+  };
+
+  // Helper to move pet to home
+  const movePetToHome = async (petId: string, targetHomeId: "home_star" | "home_pig" | "home_dog") => {
+    if (activeTab === "single") {
+      setPets(prev => {
+        const next = prev.map(p => {
+          if (p.id === petId) {
+            return { ...p, currentHome: targetHomeId };
+          }
+          return p;
+        });
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`${localKey}_pets_v2`, JSON.stringify(next));
+        }
+        return next;
+      });
+      
+      // Auto sync state if it's the active focused pet
+      if (petId === focusedPetId) {
+        setCurrentHomeId(targetHomeId);
+      }
+
+      const movedPet = pets.find(p => p.id === petId);
+      if (movedPet) {
+        setBubbleText(`🚚 成功將「${movedPet.name}」移居到「${getHomeName(targetHomeId)}」！✨`);
+      }
+    } else if (activeTab === "coparent") {
+      try {
+        await executeCoparentAction("move-pet-home", { petId, targetHomeId });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  // Egg Hatching function
+  const handleHatchEgg = async () => {
+    if (activeTab === "single") {
+      if (soloCoins < 200) {
+        alert("❌ 您的星星幣不足 200 🪙！多參與投稿打卡、撫摸星寵或切換家園來賺取吧！✨");
+        return;
+      }
+
+      // Deduct 200 Star Coins
+      const newCoins = soloCoins - 200;
+      setSoloCoins(newCoins);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`${localKey}_coins`, String(newCoins));
+      }
+
+      // Pick random species: "pig" or "dog"
+      const isPig = Math.random() < 0.5;
+      const species = isPig ? "pig" : "dog";
+      
+      // Choose a cute random name
+      const pigNames = ["草莓嘟嘟", "蜜桃波波", "櫻桃糯米", "年糕胖胖", "粉嫩布丁", "甜心脆脆"];
+      const dogNames = ["幸運啵啵", "小椰果凍", "啵啵可可", "旺仔椰椰", "奶糖曲奇", "皮皮球球"];
+      const randomName = isPig 
+        ? pigNames[Math.floor(Math.random() * pigNames.length)]
+        : dogNames[Math.floor(Math.random() * dogNames.length)];
+
+      const newPetId = `${species}_${Date.now()}`;
+      const defaultHome = isPig ? "home_pig" : "home_dog";
+
+      const newPet: PetInstance = {
+        id: newPetId,
+        species,
+        name: randomName,
+        level: 1,
+        exp: 0,
+        fullness: 50,
+        love: 60,
+        customSkin: "",
+        currentHome: defaultHome
+      };
+
+      // Play hatching sequence
+      setHatchedPet(newPet);
+      setIsHatching(true);
+      setHatchingEggPhase("egg_idle");
+
+      // Phase 1: idle, then shake after 700ms
+      setTimeout(() => {
+        setHatchingEggPhase("egg_shake");
+      }, 700);
+
+      // Phase 2: burst after 2200ms
+      setTimeout(() => {
+        setHatchingEggPhase("egg_burst");
+      }, 2200);
+
+      // Phase 3: reveal after 3400ms
+      setTimeout(() => {
+        setHatchingEggPhase("egg_reveal");
+        
+        // Permanently save the new pet to pets list
+        setPets(prev => {
+          const next = [...prev, newPet];
+          if (typeof window !== "undefined") {
+            localStorage.setItem(`${localKey}_pets_v2`, JSON.stringify(next));
+          }
+          return next;
+        });
+
+        // Switch active home to the hatched pet's home so they can see it instantly!
+        setCurrentHomeId(defaultHome);
+        setFocusedPetId(newPetId);
+        setSoloPetName(newPet.name);
+        setSoloFullness(newPet.fullness);
+        setSoloLove(newPet.love);
+        setSoloLevel(newPet.level);
+        setSoloExp(newPet.exp);
+        setSoloCustomSkin(newPet.customSkin);
+
+        // Add 100 EXP as a special gift to the user's active levels
+        addSoloExp(100);
+      }, 3500);
+    } else if (activeTab === "coparent") {
+      if (!activeGroup) return;
+      if ((activeGroup.star_coins || 0) < 200) {
+        alert("❌ 您的家庭共享星星幣不足 200 🪙！請投稿分享照片打卡賺取星星幣喔！✨");
+        return;
+      }
+
+      try {
+        const res = await executeCoparentAction("hatch-egg", {});
+        if (res && res.newPet) {
+          const newPet = res.newPet;
+          
+          // Play hatching sequence for coparent pet
+          setHatchedPet(newPet);
+          setIsHatching(true);
+          setHatchingEggPhase("egg_idle");
+
+          // Phase 1: idle, then shake after 700ms
+          setTimeout(() => {
+            setHatchingEggPhase("egg_shake");
+          }, 700);
+
+          // Phase 2: burst after 2200ms
+          setTimeout(() => {
+            setHatchingEggPhase("egg_burst");
+          }, 2200);
+
+          // Phase 3: reveal after 3400ms
+          setTimeout(() => {
+            setHatchingEggPhase("egg_reveal");
+          }, 3500);
+        }
+      } catch (err: any) {
+        alert(err.message || "孵化失敗");
+      }
+    }
+  };
+
+  // Helper to update a single pet
+  const updatePet = async (petId: string, updates: Partial<PetInstance>) => {
+    if (activeTab === "single") {
+      setPets(prev => {
+        const next = prev.map(p => p.id === petId ? { ...p, ...updates } : p);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`${localKey}_pets_v2`, JSON.stringify(next));
+        }
+        return next;
+      });
+    } else if (activeTab === "coparent") {
+      if (updates.name) {
+        try {
+          await executeCoparentAction("rename", { newName: updates.name, petId });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  };
+
   // Shop & Achievements Overlays
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
@@ -498,21 +777,42 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
       if (pet.custom_skin !== undefined) setSoloCustomSkin(pet.custom_skin);
       if (pet.level !== undefined) setSoloLevel(pet.level);
       if (pet.exp !== undefined) setSoloExp(pet.exp);
+
+      if (pet.pets) {
+        setPets(pet.pets);
+      } else {
+        const upgraded = getInitialPets(localKey, pet.name, pet.fullness, pet.love, pet.level, pet.exp, pet.custom_skin);
+        setPets(upgraded);
+      }
+      if (pet.currentHomeId) setCurrentHomeId(pet.currentHomeId);
+      if (pet.focusedPetId) setFocusedPetId(pet.focusedPetId);
     } else {
       // Fetch local storage fallback if they were a guest, or set defaults
       const savedName = localStorage.getItem(`${localKey}_name`);
+      const savedFullnessVal = localStorage.getItem(`${localKey}_fullness`);
+      const savedLoveVal = localStorage.getItem(`${localKey}_love`);
+      const savedLevelVal = localStorage.getItem(`${localKey}_level`);
+      const savedExpVal = localStorage.getItem(`${localKey}_exp`);
+      const savedSkinVal = localStorage.getItem(`${localKey}_custom_skin`);
+      
+      const legacyName = savedName || "棉花糖糖";
+      const legacyFullness = savedFullnessVal ? parseInt(savedFullnessVal, 10) : 60;
+      const legacyLove = savedLoveVal ? parseInt(savedLoveVal, 10) : 70;
+      const legacyLevel = savedLevelVal ? parseInt(savedLevelVal, 10) : 1;
+      const legacyExp = savedExpVal ? parseInt(savedExpVal, 10) : 0;
+      const legacySkin = savedSkinVal || "";
+
+      const upgraded = getInitialPets(localKey, legacyName, legacyFullness, legacyLove, legacyLevel, legacyExp, legacySkin);
+      setPets(upgraded);
+
       if (savedName) {
         setSoloPetName(savedName);
-        const savedFullness = localStorage.getItem(`${localKey}_fullness`);
-        if (savedFullness) setSoloFullness(parseInt(savedFullness, 10));
-        const savedLove = localStorage.getItem(`${localKey}_love`);
-        if (savedLove) setSoloLove(parseInt(savedLove, 10));
+        if (savedFullnessVal) setSoloFullness(parseInt(savedFullnessVal, 10));
+        if (savedLoveVal) setSoloLove(parseInt(savedLoveVal, 10));
         const savedCoins = localStorage.getItem(`${localKey}_coins`);
         if (savedCoins) setSoloCoins(parseInt(savedCoins, 10));
-        const savedLevel = localStorage.getItem(`${localKey}_level`);
-        if (savedLevel) setSoloLevel(parseInt(savedLevel, 10));
-        const savedExp = localStorage.getItem(`${localKey}_exp`);
-        if (savedExp) setSoloExp(parseInt(savedExp, 10));
+        if (savedLevelVal) setSoloLevel(parseInt(savedLevelVal, 10));
+        if (savedExpVal) setSoloExp(parseInt(savedExpVal, 10));
         const savedFurniture = localStorage.getItem(`${localKey}_furniture`);
         if (savedFurniture) {
           try { setSoloFurniture(JSON.parse(savedFurniture)); } catch (e) {}
@@ -521,17 +821,137 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
         if (savedFridge) {
           try { setSoloFridgeFood(JSON.parse(savedFridge)); } catch (e) {}
         }
-        const savedSkin = localStorage.getItem(`${localKey}_custom_skin`);
-        if (savedSkin) setSoloCustomSkin(savedSkin);
+        if (savedSkinVal) setSoloCustomSkin(savedSkinVal);
       }
+      
+      const savedHomeId = localStorage.getItem(`${localKey}_currentHomeId`);
+      if (savedHomeId) setCurrentHomeId(savedHomeId as any);
+      const savedFocusId = localStorage.getItem(`${localKey}_focusedPetId`);
+      if (savedFocusId) setFocusedPetId(savedFocusId);
     }
   }, [currentUser?.id, localKey]);
 
-  // Sync solo_pet extra stats to localstorage
+  // Sync solo_pet extra stats, currentHomeId, and focusedPetId to localstorage
   useEffect(() => {
     localStorage.setItem(`${localKey}_level`, soloLevel.toString());
     localStorage.setItem(`${localKey}_exp`, soloExp.toString());
-  }, [localKey, soloLevel, soloExp]);
+    localStorage.setItem(`${localKey}_currentHomeId`, currentHomeId);
+    localStorage.setItem(`${localKey}_focusedPetId`, focusedPetId);
+  }, [localKey, soloLevel, soloExp, currentHomeId, focusedPetId]);
+
+  // Synchronize active stats to the currently focused pet in the individual pets list
+  useEffect(() => {
+    if (activeTab !== "single") return;
+    setPets(prev => {
+      const isExist = prev.some(p => p.id === focusedPetId);
+      if (!isExist) return prev;
+      const next = prev.map(p => {
+        if (p.id === focusedPetId) {
+          return {
+            ...p,
+            name: soloPetName,
+            fullness: soloFullness,
+            love: soloLove,
+            level: soloLevel,
+            exp: soloExp,
+            customSkin: soloCustomSkin
+          };
+        }
+        return p;
+      });
+      // Compare stringified versions to avoid infinite loop of updates
+      const oldVal = localStorage.getItem(`${localKey}_pets_v2`);
+      const newVal = JSON.stringify(next);
+      if (oldVal !== newVal) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`${localKey}_pets_v2`, newVal);
+        }
+        return next;
+      }
+      return prev;
+    });
+  }, [soloPetName, soloFullness, soloLove, soloLevel, soloExp, soloCustomSkin, focusedPetId, activeTab, localKey]);
+
+  // Auto dialogues between co-habiting pets
+  useEffect(() => {
+    if (activeTab !== "single") return;
+    const activePets = pets.filter(p => p.currentHome === currentHomeId);
+    if (activePets.length < 2) {
+      setAutoConversation(null);
+      return;
+    }
+
+    const dialogues = [
+      [
+        { id: 0, text: "好開心能跟你一起住在這裡！💖" },
+        { id: 1, text: "我也是！有你作伴，這裡就是最溫馨的星光城堡！🏯" }
+      ],
+      [
+        { id: 0, text: "主人擺放的家具真的好漂亮喔，我們真是太幸福了～🛋️" },
+        { id: 1, text: "對啊！等一下我們要不要躺在草莓大床上睡午覺？💤" }
+      ],
+      [
+        { id: 0, text: "你今天肚子餓了嗎？要不要一起去敲敲冰箱？🧊" },
+        { id: 1, text: "好耶！冰箱裡聽說有草莓波點冰箱新進的蜜桃流星果汁！🍑" }
+      ],
+      [
+        { id: 0, text: "看我！我會發光喔，閃亮閃亮的！✨" },
+        { id: 1, text: "哇！你好耀眼喔！不愧是全宇宙最萌的小星寵！🌟" }
+      ],
+      [
+        { id: 0, text: "哼！你是不是偷偷吃掉了最後一個櫻桃布丁？🍮" },
+        { id: 1, text: "才...才沒有呢！肯定是冰箱精靈悄悄拿走享用啦！👻" }
+      ],
+      [
+        { id: 0, text: "我們今天一起在房間裡跳個舞，給主人一個驚喜吧！🎉" },
+        { id: 1, text: "好呀！看我的軟綿綿翻滾舞步，衝呀！💃" }
+      ]
+    ];
+
+    const triggerDialogue = () => {
+      setPets(currentPets => {
+        const activePets = currentPets.filter(p => p.currentHome === currentHomeId);
+        if (activePets.length < 2) return currentPets;
+
+        const randomDiag = dialogues[Math.floor(Math.random() * dialogues.length)];
+        // Pick two distinct pets
+        const petA = activePets[0];
+        const petB = activePets[1];
+
+        // Speaker A speaks
+        setAutoConversation({
+          speakerId: petA.id,
+          speakerName: petA.name,
+          text: randomDiag[0].text
+        });
+
+        // Speaker B replies after 3.5 seconds
+        setTimeout(() => {
+          setAutoConversation({
+            speakerId: petB.id,
+            speakerName: petB.name,
+            text: randomDiag[1].text
+          });
+        }, 3500);
+
+        // Hide after 7 seconds
+        setTimeout(() => {
+          setAutoConversation(null);
+        }, 7000);
+
+        return currentPets;
+      });
+    };
+
+    // Trigger first dialog after 8 seconds, and then every 24 seconds
+    const initialDelay = setTimeout(triggerDialogue, 8000);
+    const interval = setInterval(triggerDialogue, 24000);
+
+    return () => {
+      clearTimeout(initialDelay);
+      clearInterval(interval);
+    };
+  }, [pets, currentHomeId, activeTab]);
 
   // Fetch total user posts to sync achievements
   useEffect(() => {
@@ -731,13 +1151,16 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             fridge: soloFridgeFood,
             custom_skin: soloCustomSkin,
             level: soloLevel,
-            exp: soloExp
+            exp: soloExp,
+            pets: pets,
+            currentHomeId: currentHomeId,
+            focusedPetId: focusedPetId
           }
         })
       }).catch(err => console.error("Failed to sync solo pet to cloud", err));
     }, 1200);
     return () => clearTimeout(saveTimeout);
-  }, [currentUser?.id, soloPetName, soloFullness, soloLove, soloCoins, soloFurniture, soloFridgeFood, soloCustomSkin, soloLevel, soloExp]);
+  }, [currentUser?.id, soloPetName, soloFullness, soloLove, soloCoins, soloFurniture, soloFridgeFood, soloCustomSkin, soloLevel, soloExp, pets, currentHomeId, focusedPetId]);
 
   // Fetch active coparent group member details dynamically
   useEffect(() => {
@@ -1299,23 +1722,209 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     }
   };
 
+  // Automated conversations between pets when multiple co-habit in the same home
+  useEffect(() => {
+    if (activeTab !== "single") return;
+
+    const interval = setInterval(() => {
+      const activePets = pets.filter(p => p.currentHome === currentHomeId);
+      if (activePets.length < 2) {
+        setAutoConversation(null);
+        return;
+      }
+
+      const starPet = activePets.find(p => p.species === "star");
+      const pigPet = activePets.find(p => p.species === "pig");
+      const dogPet = activePets.find(p => p.species === "dog");
+
+      let dialogues: { speakerId: string; text: string }[] = [];
+
+      if (starPet && pigPet && dogPet) {
+        const r = Math.random();
+        if (r < 0.33) {
+          dialogues = [
+            { speakerId: starPet.id, text: `大家快看！今晚的星空好璀璨喔～🌌` },
+            { speakerId: pigPet.id, text: `哼唧哼唧，今晚最適合喝香甜的蜜桃流星果汁！🐷` },
+            { speakerId: dogPet.id, text: `汪！今晚我要在大草地上開心地追著流星跑！🐶✨` }
+          ];
+        } else if (r < 0.66) {
+          dialogues = [
+            { speakerId: pigPet.id, text: `這個大沙發是我的！我要舒服地躺著，哼哼～🐷` },
+            { speakerId: dogPet.id, text: `汪！明明是我先走過來的，分我一半啦！🐶` },
+            { speakerId: starPet.id, text: `好啦好啦，大家一起擠一擠，沙發很大的啦～🫂✨` }
+          ];
+        } else {
+          dialogues = [
+            { speakerId: dogPet.id, text: `小豬、小星星！我們來玩捉迷藏好不好？🐶🐾` },
+            { speakerId: starPet.id, text: `好呀！那我躲到棉花糖蓬蓬床後面～✨` },
+            { speakerId: pigPet.id, text: `哼唧！那我就負責吃掉圓桌上的馬卡龍！😋` }
+          ];
+        }
+      } else if (starPet && pigPet) {
+        const r = Math.random();
+        if (r < 0.5) {
+          dialogues = [
+            { speakerId: starPet.id, text: `小豬豬「${pigPet.name}」，你是不是又偷偷吃了冰箱裡的櫻桃草莓布丁？😮` },
+            { speakerId: pigPet.id, text: `哼唧！才沒有呢，我只是幫忙測試一下布丁的Q彈度啦～🐷💖` }
+          ];
+        } else {
+          dialogues = [
+            { speakerId: pigPet.id, text: `小星星「${starPet.name}」，你的身體軟綿綿的，好像大大的棉花糖喔！🍬` },
+            { speakerId: starPet.id, text: `嘿嘿，因為我是用亮晶晶的願望和甜度做成的呀！🌟` }
+          ];
+        }
+      } else if (starPet && dogPet) {
+        const r = Math.random();
+        if (r < 0.5) {
+          dialogues = [
+            { speakerId: dogPet.id, text: `「${starPet.name}」！我們來玩扔星星和接球球的遊戲吧！汪汪！🐶⚾` },
+            { speakerId: starPet.id, text: `好呀好呀！但是你不准真的用大嘴巴咬住我喔，我怕癢～🌟` }
+          ];
+        } else {
+          dialogues = [
+            { speakerId: starPet.id, text: `小狗「${dogPet.name}」，你的尾巴搖得像小直升機一樣，太熱情啦！💖` },
+            { speakerId: dogPet.id, text: `汪嗚！因為能看到心愛的主人和你在同一間家園，我太興奮了嘛！🐶🐾` }
+          ];
+        }
+      } else if (pigPet && dogPet) {
+        const r = Math.random();
+        if (r < 0.5) {
+          dialogues = [
+            { speakerId: pigPet.id, text: `小狗「${dogPet.name}」，你尾巴搖得太快，把我的蜜桃流星果汁都吹得冒泡了啦！💢` },
+            { speakerId: dogPet.id, text: `汪汪！對不起嘛，那我輕一點搖，你分我喝一口果汁好不好？🐶🍹` }
+          ];
+        } else {
+          dialogues = [
+            { speakerId: pigPet.id, text: `哼唧哼唧，我們在同一間屋子裡，感觉家裡變得好熱鬧、好溫暖喔！🐷🏡` },
+            { speakerId: dogPet.id, text: `沒確汪！兩個人合養，有雙倍的愛 and 雙倍的零食吃！汪汪！🐶💖` }
+          ];
+        }
+      }
+
+      if (dialogues.length > 0) {
+        let step = 0;
+        const playStep = () => {
+          if (step < dialogues.length) {
+            const current = dialogues[step];
+            const p = activePets.find(pet => pet.id === current.speakerId);
+            if (p) {
+              setAutoConversation({
+                speakerId: current.speakerId,
+                speakerName: p.name,
+                text: current.text
+              });
+            }
+            step++;
+            setTimeout(playStep, 4500); // 4.5 seconds per message sentence
+          } else {
+            setAutoConversation(null);
+          }
+        };
+        playStep();
+      }
+    }, 14000); // dialogue trigger interval every 14 seconds
+
+    return () => clearInterval(interval);
+  }, [pets, currentHomeId, activeTab]);
+
+  // Helper getters to unify single/coparent/friend modes and support multiple pets, hatching, room switching and individual custom skin paintings
+  const getActivePetsList = (): any[] => {
+    if (activeTab === "single") {
+      return pets;
+    } else if (activeTab === "coparent") {
+      if (activeGroup) {
+        return activeGroup.pets_v2 || [
+          {
+            id: "star",
+            species: "star",
+            name: activeGroup.pet?.name || "蜜桃粉萌星",
+            level: activeGroup.pet?.level || 1,
+            exp: activeGroup.pet?.exp || 0,
+            fullness: activeGroup.pet?.fullness || 50,
+            love: activeGroup.pet?.love || 50,
+            customSkin: activeGroup.pet?.custom_skin || "",
+            currentHome: activeGroup.currentHomeId || "home_star"
+          }
+        ];
+      }
+      return [];
+    } else {
+      // friend
+      if (isVisitingGroup && selectedVisitedGroup) {
+        return selectedVisitedGroup.pets_v2 || [
+          {
+            id: "star",
+            species: "star",
+            name: selectedVisitedGroup.pet?.name || "蜜桃粉萌星",
+            level: selectedVisitedGroup.pet?.level || 1,
+            exp: selectedVisitedGroup.pet?.exp || 0,
+            fullness: selectedVisitedGroup.pet?.fullness || 50,
+            love: selectedVisitedGroup.pet?.love || 50,
+            customSkin: selectedVisitedGroup.pet?.custom_skin || "",
+            currentHome: selectedVisitedGroup.currentHomeId || "home_star"
+          }
+        ];
+      } else if (visitedPet) {
+        return [
+          {
+            id: "star",
+            species: "star",
+            name: visitedPet.name || "小星",
+            level: visitedPet.level || 1,
+            exp: visitedPet.exp || 0,
+            fullness: visitedPet.fullness || 75,
+            love: visitedPet.love || 80,
+            customSkin: visitedPet.custom_skin || "",
+            currentHome: "home_star"
+          }
+        ];
+      }
+      return [];
+    }
+  };
+
+  const getEffectiveHomeId = () => {
+    if (activeTab === "single") {
+      return currentHomeId;
+    } else if (activeTab === "coparent") {
+      return activeGroup?.currentHomeId || "home_star";
+    } else {
+      if (isVisitingGroup && selectedVisitedGroup) {
+        return selectedVisitedGroup.currentHomeId || "home_star";
+      }
+      return "home_star";
+    }
+  };
+
+  const getEffectiveFocusedPetId = () => {
+    if (activeTab === "single") {
+      return focusedPetId;
+    } else if (activeTab === "coparent") {
+      return activeGroup?.focusedPetId || "star";
+    } else {
+      if (isVisitingGroup && selectedVisitedGroup) {
+        return selectedVisitedGroup.focusedPetId || "star";
+      }
+      return "star";
+    }
+  };
+
+  const activePetsList = getActivePetsList();
+  const effectiveHomeId = getEffectiveHomeId();
+  const effectiveFocusedPetId = getEffectiveFocusedPetId();
+  const focusedPetObj = activePetsList.find(p => p.id === effectiveFocusedPetId) || activePetsList[0];
+
   const currentPetName = activeTab === "single"
     ? soloPetName
-    : activeTab === "friend"
-    ? (isVisitingGroup ? (selectedVisitedGroup?.pet?.name || "蜜桃粉萌星") : (visitedPet?.name || "小星"))
-    : activeGroup?.pet?.name || "蜜桃粉萌星";
+    : focusedPetObj?.name || "蜜桃粉萌星";
 
   const currentFullness = activeTab === "single"
     ? soloFullness
-    : activeTab === "friend"
-    ? (isVisitingGroup ? (selectedVisitedGroup?.pet?.fullness || 60) : 75)
-    : activeGroup?.pet?.fullness || 50;
+    : focusedPetObj?.fullness ?? 50;
 
   const currentLove = activeTab === "single"
     ? soloLove
-    : activeTab === "friend"
-    ? (isVisitingGroup ? (selectedVisitedGroup?.pet?.love || 65) : 80)
-    : activeGroup?.pet?.love || 50;
+    : focusedPetObj?.love ?? 50;
 
   const currentCoins = activeTab === "single"
     ? soloCoins
@@ -1337,9 +1946,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
   const currentCustomSkin = activeTab === "single"
     ? soloCustomSkin
-    : activeTab === "friend"
-    ? (isVisitingGroup ? (selectedVisitedGroup?.pet?.custom_skin || "") : (visitedPet?.custom_skin || ""))
-    : activeGroup?.pet?.custom_skin || "";
+    : focusedPetObj?.customSkin || focusedPetObj?.custom_skin || "";
 
   return (
     <div className="relative w-full max-w-5xl mx-auto glass border border-[#FF799C]/20 rounded-[36px] p-6 text-center overflow-hidden min-h-[620px] flex flex-col justify-between shadow-xl">
@@ -1650,8 +2257,26 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
           <div
             ref={roomRef}
             onClick={handleRoomClick}
-            className="relative w-full h-[300px] bg-gradient-to-b from-[#FFF0F4] to-[#FFE0E9] border-2 border-[#FF799C]/25 rounded-2xl overflow-hidden shadow-inner cursor-crosshair"
+            className={`relative w-full h-[300px] border-2 rounded-2xl overflow-hidden shadow-inner cursor-crosshair transition-all duration-700 ${
+              activeTab === "single"
+                ? currentHomeId === "home_pig"
+                  ? "bg-gradient-to-b from-[#FFF5F6] to-[#FFEBF1] border-[#FF5B7E]/25"
+                  : currentHomeId === "home_dog"
+                  ? "bg-gradient-to-b from-[#FFFBF2] to-[#F5EBDD] border-[#D4A373]/25"
+                  : "bg-gradient-to-b from-[#FFF0F4] to-[#FFE0E9] border-[#FF799C]/25"
+                : "bg-gradient-to-b from-[#FFF0F4] to-[#FFE0E9] border-[#FF799C]/25"
+            }`}
           >
+            {/* Active home badge indicator */}
+            {activeTab === "single" && (
+              <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-xs border border-[#FF799C]/20 px-3 py-1 rounded-full text-[9px] font-bold text-[#6E4B55] flex items-center gap-1 shadow-xs">
+                <span>{getHomeName(currentHomeId)}</span>
+                {pets.filter(p => p.currentHome === currentHomeId).length === 0 && (
+                  <span className="bg-amber-100 text-amber-700 text-[8px] px-1.5 rounded-full font-black animate-pulse">閒置空房</span>
+                )}
+              </div>
+            )}
+
             {/* Cute backdrop wallpaper details */}
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-16 h-16 bg-gradient-to-b from-[#2E1834] to-[#4A1D50] border-2 border-white rounded-full flex items-center justify-center overflow-hidden shadow-md">
               <div className="absolute top-1 right-2 text-yellow-200 text-[9px] animate-pulse">🌙</div>
@@ -1661,7 +2286,9 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
             <div className="absolute top-6 left-6 text-xl opacity-20 select-none">☁️</div>
             <div className="absolute top-14 right-10 text-lg opacity-25 select-none animate-pulse">🌸</div>
-            <div className="absolute top-4 right-6 text-[8px] opacity-25 font-mono">PINKISH ROOM</div>
+            <div className="absolute top-4 right-6 text-[8px] opacity-25 font-mono uppercase tracking-wider">
+              {activeTab === "single" ? getHomeName(currentHomeId) : "PINKISH ROOM"}
+            </div>
 
             {/* RENDER CUTE ROUNDED PINK FURNITURE VECTOR OBJECTS */}
             {currentFurnitureList.map((f: any) => (
@@ -1748,213 +2375,498 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             </div>
 
             {/* THE REDESIGNED EXTREMELY CUTELY ROUNDED PINK COTTON CANDY PET STAR */}
-            <div 
-              className="z-20 transition-all duration-700 ease-out"
-              style={
-                petState === "sitting" && currentFurnitureList.find((f: any) => f.id === "sofa")
-                  ? {
-                      position: "absolute",
-                      left: ((currentFurnitureList.find((f: any) => f.id === "sofa")?.x ?? 190) - 35) + "px",
-                      top: ((currentFurnitureList.find((f: any) => f.id === "sofa")?.y ?? 160) - 45) + "px",
-                      transform: "none",
-                    }
-                  : petState === "sleeping" && currentFurnitureList.find((f: any) => f.id === "bed")
-                  ? {
-                      position: "absolute",
-                      left: ((currentFurnitureList.find((f: any) => f.id === "bed")?.x ?? 20) - 35) + "px",
-                      top: ((currentFurnitureList.find((f: any) => f.id === "bed")?.y ?? 150) - 35) + "px",
-                      transform: "none",
-                    }
-                  : {
-                      position: "absolute",
-                      bottom: "20px",
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                    }
-              }
-            >
-              
-              {/* Feeding floating food items indicator */}
-              <AnimatePresence>
-                {feedEffect && (
-                  <motion.div
-                    initial={{ scale: 0.5, y: 35, opacity: 0 }}
-                    animate={{ scale: [1, 1.5, 0.9], y: [10, -40, -80], opacity: [0, 1, 1, 0] }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1.3, ease: "easeOut" }}
-                    className="absolute text-4xl z-30 left-7 top-[-35px] filter drop-shadow-md"
-                  >
-                    {feedEffect}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            {(activeTab === "single" || activeTab === "coparent") ? (
+              // MULTIPLE PETS CO-HABITATION
+              getActivePetsList().filter(p => p.currentHome === getEffectiveHomeId()).map((p, idx, filtered) => {
+                const isFocused = getEffectiveFocusedPetId() === p.id;
+                const pos = getPetPositionClass(idx, filtered.length);
+                
+                let petStyle: React.CSSProperties = {
+                  position: "absolute",
+                  transition: "all 0.8s ease-in-out",
+                  ...pos
+                };
 
-              {/* Floating sleep Zzz letters if sleeping */}
-              {petState === "sleeping" && (
-                <div className="absolute top-[-30px] right-[-10px] z-30 flex flex-col pointer-events-none select-none">
-                  <motion.span 
-                    animate={{ y: [-5, -25], x: [0, 8, 0], opacity: [0, 1, 0], scale: [0.8, 1.2, 0.9] }} 
-                    transition={{ repeat: Infinity, duration: 2, delay: 0 }}
-                    className="text-xs font-bold text-[#FF799C]"
-                  >
-                    z
-                  </motion.span>
-                  <motion.span 
-                    animate={{ y: [-5, -25], x: [0, -6, 0], opacity: [0, 1, 0], scale: [0.8, 1.3, 0.9] }} 
-                    transition={{ repeat: Infinity, duration: 2, delay: 0.6 }}
-                    className="text-sm font-bold text-[#FF799C]/80 ml-2"
-                  >
-                    Z
-                  </motion.span>
-                  <motion.span 
-                    animate={{ y: [-5, -25], x: [0, 10, 0], opacity: [0, 1, 0], scale: [0.8, 1.4, 0.9] }} 
-                    transition={{ repeat: Infinity, duration: 2, delay: 1.2 }}
-                    className="text-md font-bold text-[#FF799C]/60 ml-4"
-                  >
-                    Z
-                  </motion.span>
-                </div>
-              )}
+                if (isFocused && petState === "sitting" && currentFurnitureList.find((f: any) => f.id === "sofa")) {
+                  const sofa = currentFurnitureList.find((f: any) => f.id === "sofa");
+                  petStyle = {
+                    position: "absolute",
+                    left: ((sofa?.x ?? 190) - 35) + "px",
+                    top: ((sofa?.y ?? 160) - 45) + "px",
+                    transform: "none",
+                    transition: "all 0.8s ease-in-out"
+                  };
+                } else if (isFocused && petState === "sleeping" && currentFurnitureList.find((f: any) => f.id === "bed")) {
+                  const bed = currentFurnitureList.find((f: any) => f.id === "bed");
+                  petStyle = {
+                    position: "absolute",
+                    left: ((bed?.x ?? 20) - 35) + "px",
+                    top: ((bed?.y ?? 150) - 35) + "px",
+                    transform: "none",
+                    transition: "all 0.8s ease-in-out"
+                  };
+                } else {
+                  petStyle = {
+                    position: "absolute",
+                    bottom: "20px",
+                    transition: "all 0.8s ease-in-out",
+                    ...pos
+                  };
+                }
 
-              {/* Halo background light glow */}
-              <div className="absolute inset-0 m-auto h-24 w-24 rounded-full bg-gradient-to-tr from-[#FF799C]/20 to-[#FFD5E0]/45 blur-xl animate-pulse pointer-events-none" />
+                const displayExpr = isFocused ? expression : "happy";
+                const displayState = isFocused ? petState : "idle";
 
-              {/* Main star with dynamic animation */}
-              <motion.div
-                className="relative flex items-center justify-center cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStarClick();
-                }}
-                animate={isDancing ? {
-                  scale: [1, 1.25, 0.9, 1.18, 1],
-                  rotate: [0, 18, -18, 6, 0],
-                  y: [0, -30, 12, -6, 0]
-                } : petState === "sleeping" ? {
-                  y: [0, -3, 0],
-                  rotate: [18, 20, 16, 18] // Comfortable sleep tilt
-                } : petState === "sitting" ? {
-                  y: [0, -2, 0],
-                  scale: 0.96, // Comfy squish
-                  rotate: [0, 1, -1, 0]
-                } : {
-                  y: [0, -7, 0],
-                  rotate: [0, 0.6, -0.6, 0]
-                }}
-                transition={isDancing ? {
-                  duration: 0.85,
-                  ease: "easeInOut"
-                } : petState === "sleeping" ? {
-                  duration: 5.5,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                } : {
-                  duration: 4.8,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
+                return (
+                  <div
+                    key={p.id}
+                    className={`z-20 transition-all duration-300 ${isFocused ? "scale-105 filter drop-shadow-[0_0_15px_rgba(255,121,156,0.55)]" : "opacity-85 hover:opacity-100"}`}
+                    style={petStyle}
+                  >
+                    {/* Feeding floating food items indicator */}
+                    <AnimatePresence>
+                      {isFocused && feedEffect && (
+                        <motion.div
+                          initial={{ scale: 0.5, y: 35, opacity: 0 }}
+                          animate={{ scale: [1, 1.5, 0.9], y: [10, -40, -80], opacity: [0, 1, 1, 0] }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 1.3, ease: "easeOut" }}
+                          className="absolute text-4xl z-30 left-7 top-[-35px] filter drop-shadow-md"
+                        >
+                          {feedEffect}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Floating sleep Zzz letters if sleeping */}
+                    {isFocused && petState === "sleeping" && (
+                      <div className="absolute top-[-30px] right-[-10px] z-30 flex flex-col pointer-events-none select-none">
+                        <motion.span 
+                          animate={{ y: [-5, -25], x: [0, 8, 0], opacity: [0, 1, 0], scale: [0.8, 1.2, 0.9] }} 
+                          transition={{ repeat: Infinity, duration: 2, delay: 0 }}
+                          className="text-xs font-bold text-[#FF799C]"
+                        >
+                          z
+                        </motion.span>
+                        <motion.span 
+                          animate={{ y: [-5, -25], x: [0, -6, 0], opacity: [0, 1, 0], scale: [0.8, 1.3, 0.9] }} 
+                          transition={{ repeat: Infinity, duration: 2, delay: 0.6 }}
+                          className="text-sm font-bold text-[#FF799C]/80 ml-2"
+                        >
+                          Z
+                        </motion.span>
+                        <motion.span 
+                          animate={{ y: [-5, -25], x: [0, 10, 0], opacity: [0, 1, 0], scale: [0.8, 1.4, 0.9] }} 
+                          transition={{ repeat: Infinity, duration: 2, delay: 1.2 }}
+                          className="text-md font-bold text-[#FF799C]/60 ml-4"
+                        >
+                          Z
+                        </motion.span>
+                      </div>
+                    )}
+
+                    {/* Halo background light glow */}
+                    {isFocused && (
+                      <div className="absolute inset-0 m-auto h-24 w-24 rounded-full bg-gradient-to-tr from-[#FF799C]/25 to-[#FFD5E0]/45 blur-xl animate-pulse pointer-events-none" />
+                    )}
+
+                    {/* Name tag and Level tag above Pet */}
+                    <div className="absolute top-[-30px] left-1/2 transform -translate-x-1/2 bg-white/95 border border-[#FF799C]/30 text-[10px] text-[#6E4B55] font-black px-2.5 py-0.5 rounded-full shadow-xs whitespace-nowrap flex items-center gap-1 z-30">
+                      <span className="text-[9px] bg-[#FF799C] text-white px-1 rounded-sm">Lv.{p.level}</span>
+                      <span>{p.name}</span>
+                      {isFocused && <span className="text-[#FF4B72]">⭐</span>}
+                    </div>
+
+                    {/* Speech bubble for individual pet if speaking - positioned safely above so it never obscures the pet itself */}
+                    {((isFocused && showBubble && bubbleText) || (autoConversation && autoConversation.speakerId === p.id)) && (
+                      <div className="absolute top-[-95px] left-1/2 transform -translate-x-1/2 z-40">
+                        <AnimatePresence>
+                          <motion.div
+                            initial={{ scale: 0.8, opacity: 0, y: 5 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.8, opacity: 0, y: -5 }}
+                            className={`bg-white/95 border text-[#6E4B55] px-3.5 py-1.5 rounded-2xl max-w-[170px] shadow-md text-[10px] text-left pointer-events-auto relative whitespace-normal break-words ${autoConversation && autoConversation.speakerId === p.id ? "border-[#FF9EBA] ring-1 ring-[#FF9EBA]/30" : "border-[#FF799C]/25"}`}
+                          >
+                            <span className="font-extrabold text-[#FF799C] mr-1 block text-[8px] uppercase tracking-wide">
+                              {autoConversation && autoConversation.speakerId === p.id ? `${p.name}` : "對話"}
+                            </span>
+                            {autoConversation && autoConversation.speakerId === p.id ? autoConversation.text : bubbleText}
+                            <div className="absolute bottom-[-5px] left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-white border-r border-b border-[#FF799C]/25 rotate-45" />
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
+                    )}
+
+                    {/* Main star with dynamic animation */}
+                    <motion.div
+                      className="relative flex items-center justify-center cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (getEffectiveFocusedPetId() === p.id) {
+                          handleStarClick();
+                        } else {
+                          if (activeTab === "single") {
+                            selectFocusedPet(p.id);
+                          } else if (activeTab === "coparent") {
+                            executeCoparentAction("switch-home-and-focus", { homeId: p.currentHome, petId: p.id });
+                          }
+                        }
+                      }}
+                      animate={isDancing && isFocused ? {
+                        scale: [1, 1.25, 0.9, 1.18, 1],
+                        rotate: [0, 18, -18, 6, 0],
+                        y: [0, -30, 12, -6, 0]
+                      } : isFocused && petState === "sleeping" ? {
+                        y: [0, -3, 0],
+                        rotate: [18, 20, 16, 18] // Comfortable sleep tilt
+                      } : isFocused && petState === "sitting" ? {
+                        y: [0, -2, 0],
+                        scale: 0.96, // Comfy squish
+                        rotate: [0, 1, -1, 0]
+                      } : {
+                        y: [0, -7, 0],
+                        rotate: [0, 0.6, -0.6, 0]
+                      }}
+                      transition={isDancing && isFocused ? {
+                        duration: 0.85,
+                        ease: "easeInOut"
+                      } : isFocused && petState === "sleeping" ? {
+                        duration: 5.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      } : {
+                        duration: 4.8 + (idx * 0.4),
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                    >
+                      <svg
+                        width="115"
+                        height="115"
+                        viewBox="0 0 100 100"
+                        className="filter drop-shadow-[0_8px_18px_rgba(255,121,156,0.35)] overflow-visible"
+                      >
+                        <defs>
+                          <filter id="puffyCottonStar" x="-30%" y="-30%" width="160%" height="160%">
+                            <feTurbulence type="fractalNoise" baseFrequency="0.18" numOctaves="4" result="noise" />
+                            <feDisplacementMap in="SourceGraphic" in2="noise" scale="9.0" xChannelSelector="R" yChannelSelector="G" />
+                          </filter>
+
+                          <linearGradient id="compStarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#FFF2F5" />
+                            <stop offset="50%" stopColor="#FFCCDD" />
+                            <stop offset="100%" stopColor="#FF799C" />
+                          </linearGradient>
+
+                          <linearGradient id="compPigGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#FFF5F7" />
+                            <stop offset="50%" stopColor="#FFAEC9" />
+                            <stop offset="100%" stopColor="#FF799C" />
+                          </linearGradient>
+
+                          <linearGradient id="compDogGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#FFFBF5" />
+                            <stop offset="50%" stopColor="#F5D2B3" />
+                            <stop offset="100%" stopColor="#D4A373" />
+                          </linearGradient>
+                        </defs>
+
+                        {p.customSkin ? (
+                          <image
+                            href={p.customSkin}
+                            x="0"
+                            y="0"
+                            width="100"
+                            height="100"
+                            filter="url(#puffyCottonStar)"
+                          />
+                        ) : (
+                          <>
+                            {p.species === "star" && (
+                              <>
+                                <path
+                                  d="M 50 5 L 63 37 L 97 37 L 70 58 L 81 92 L 50 72 L 19 92 L 30 58 L 3 37 L 37 37 Z"
+                                  fill="url(#compStarGrad)"
+                                  filter="url(#puffyCottonStar)"
+                                  stroke="#FFF"
+                                  strokeWidth="2.5"
+                                  strokeLinejoin="round"
+                                />
+                                <circle cx="50" cy="48" r="16" fill="rgba(255, 255, 255, 0.45)" filter="blur(6px)" pointerEvents="none" />
+                                <g>
+                                  <path d="M 28 30 Q 23 25 28 20 Q 33 25 28 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                                  <path d="M 28 30 Q 33 35 28 40 Q 23 35 28 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                                  <circle cx="28" cy="30" r="2.5" fill="#FFCCDD" stroke="#FFF" strokeWidth="0.8" />
+                                </g>
+                              </>
+                            )}
+
+                            {p.species === "pig" && (
+                              <>
+                                <ellipse cx="50" cy="55" rx="38" ry="32" fill="url(#compPigGrad)" filter="url(#puffyCottonStar)" stroke="#FFF" strokeWidth="2.5" />
+                                <circle cx="50" cy="50" r="18" fill="rgba(255, 255, 255, 0.45)" filter="blur(6px)" pointerEvents="none" />
+                                <path d="M 20 32 Q 5 15 15 10 Q 25 15 22 30" fill="#FF9EBA" stroke="#FFF" strokeWidth="1.5" strokeLinejoin="round" />
+                                <path d="M 80 32 Q 95 15 85 10 Q 75 15 78 30" fill="#FF9EBA" stroke="#FFF" strokeWidth="1.5" strokeLinejoin="round" />
+                                <rect x="38" y="56" width="24" height="15" rx="7" fill="#FF8EA9" stroke="#FFF" strokeWidth="1.5" />
+                                <ellipse cx="45" cy="63" rx="2.2" ry="3.5" fill="#6E4B55" />
+                                <ellipse cx="55" cy="63" rx="2.2" ry="3.5" fill="#6E4B55" />
+                                <g transform="translate(58, -12)">
+                                  <path d="M 20 30 Q 15 25 20 20 Q 25 25 20 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                                  <path d="M 20 30 Q 25 35 20 40 Q 15 35 20 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                                  <circle cx="20" cy="30" r="2.5" fill="#FFCCDD" stroke="#FFF" strokeWidth="0.8" />
+                                </g>
+                              </>
+                            )}
+
+                            {p.species === "dog" && (
+                              <>
+                                <ellipse cx="50" cy="55" rx="36" ry="32" fill="url(#compDogGrad)" filter="url(#puffyCottonStar)" stroke="#FFF" strokeWidth="2.5" />
+                                <circle cx="50" cy="50" r="18" fill="rgba(255, 255, 255, 0.45)" filter="blur(6px)" pointerEvents="none" />
+                                <path d="M 16 35 C 8 30 4 55 12 65 C 20 75 22 50 18 35 Z" fill="#A77443" stroke="#FFF" strokeWidth="1.5" />
+                                <path d="M 84 35 C 92 30 96 55 88 65 C 80 75 78 50 82 35 Z" fill="#A77443" stroke="#FFF" strokeWidth="1.5" />
+                                <ellipse cx="50" cy="62" rx="14" ry="10" fill="#FFF" opacity="0.8" />
+                                <path d="M 46 56 Q 50 53 54 56 Q 54 59 50 62 Q 46 59 46 56 Z" fill="#4E3629" />
+                                {(isFocused && (expression === "happy" || expression === "glow")) && (
+                                  <path d="M 47 67 Q 50 78 53 67 Z" fill="#FF799C" stroke="#FFF" strokeWidth="0.8" />
+                                )}
+                              </>
+                            )}
+
+                            {/* Shared Face Features */}
+                            <ellipse cx="36" cy="52" rx="5" ry="3" fill="#FF799C" opacity="0.6" />
+                            <ellipse cx="64" cy="52" rx="5" ry="3" fill="#FF799C" opacity="0.6" />
+
+                            <g transform="translate(0, 0)">
+                              {displayState === "sleeping" || displayExpr === "blink" ? (
+                                <>
+                                  <path d="M 38 46 Q 42 50 46 46" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                                  <path d="M 54 46 Q 58 50 62 46" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                                </>
+                              ) : displayExpr === "happy" ? (
+                                <>
+                                  <circle cx="41" cy="48" r="3.5" fill="#6E4B55" />
+                                  <circle cx="59" cy="48" r="3.5" fill="#6E4B55" />
+                                  <circle cx="39.5" cy="46" r="1.2" fill="#FFF" />
+                                  <circle cx="57.5" cy="46" r="1.2" fill="#FFF" />
+                                </>
+                              ) : displayExpr === "shy" ? (
+                                <>
+                                  <circle cx="41" cy="47" r="2.5" fill="#6E4B55" />
+                                  <circle cx="59" cy="47" r="2.5" fill="#6E4B55" />
+                                </>
+                              ) : (
+                                <>
+                                  <path d="M 37 47 L 43 47 M 40 44 L 40 50" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" />
+                                  <path d="M 57 47 L 63 47 M 60 44 L 60 50" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" />
+                                </>
+                              )}
+
+                              {displayState === "sleeping" ? (
+                                <path d="M 48 53 Q 50 51 52 53" stroke="#6E4B55" strokeWidth="2" strokeLinecap="round" fill="none" />
+                              ) : displayExpr === "happy" || displayExpr === "glow" ? (
+                                <path d="M 46 54 Q 50 58 54 54" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                              ) : (
+                                <path d="M 47 54 Q 50 56 53 54" stroke="#6E4B55" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+                              )}
+                            </g>
+                          </>
+                        )}
+                      </svg>
+                      
+                      {isFocused && (
+                        <>
+                          <div className="absolute top-2 left-6 text-yellow-300 text-sm animate-pulse">⭐</div>
+                          <div className="absolute bottom-6 right-3 text-pink-400 text-sm animate-ping">✨</div>
+                        </>
+                      )}
+                    </motion.div>
+                  </div>
+                );
+              })
+            ) : (
+              // ORIGINAL FALLBACK SINGLE PET VIEW (For friends or co-parenting room view)
+              <div 
+                className="z-20 transition-all duration-700 ease-out"
+                style={
+                  petState === "sitting" && currentFurnitureList.find((f: any) => f.id === "sofa")
+                    ? {
+                        position: "absolute",
+                        left: ((currentFurnitureList.find((f: any) => f.id === "sofa")?.x ?? 190) - 35) + "px",
+                        top: ((currentFurnitureList.find((f: any) => f.id === "sofa")?.y ?? 160) - 45) + "px",
+                        transform: "none",
+                      }
+                    : petState === "sleeping" && currentFurnitureList.find((f: any) => f.id === "bed")
+                    ? {
+                        position: "absolute",
+                        left: ((currentFurnitureList.find((f: any) => f.id === "bed")?.x ?? 20) - 35) + "px",
+                        top: ((currentFurnitureList.find((f: any) => f.id === "bed")?.y ?? 150) - 35) + "px",
+                        transform: "none",
+                      }
+                    : {
+                        position: "absolute",
+                        bottom: "20px",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                      }
+                }
               >
-                {/* SVG Puffy Star representing complete recognizable shape but pink and marshmallow textured */}
-                <svg
-                  width="135"
-                  height="135"
-                  viewBox="0 0 100 100"
-                  className="filter drop-shadow-[0_8px_18px_rgba(255,121,156,0.35)] overflow-visible"
-                >
-                  <defs>
-                    {/* Enhanced Fluffy Cotton Candy filter displacement for correct fuzzy look */}
-                    <filter id="puffyCottonStar" x="-30%" y="-30%" width="160%" height="160%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.18" numOctaves="4" result="noise" />
-                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="9.0" xChannelSelector="R" yChannelSelector="G" />
-                    </filter>
-
-                    <linearGradient id="compStarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#FFF2F5" />
-                      <stop offset="50%" stopColor="#FFCCDD" />
-                      <stop offset="100%" stopColor="#FF799C" />
-                    </linearGradient>
-                  </defs>
-
-                  {currentCustomSkin ? (
-                    /* User's custom hand-drawn pet star - fully customized, with marshmallow puffy filter correctly displayed */
-                    <image
-                      href={currentCustomSkin}
-                      x="0"
-                      y="0"
-                      width="100"
-                      height="100"
-                      filter="url(#puffyCottonStar)"
-                    />
-                  ) : (
-                    /* Default Star Companion shape - exactly like the right-corner star with pink bow and adorable face */
-                    <>
-                      {/* Star body */}
-                      <path
-                        d="M 50 5 L 63 37 L 97 37 L 70 58 L 81 92 L 50 72 L 19 92 L 30 58 L 3 37 L 37 37 Z"
-                        fill="url(#compStarGrad)"
-                        filter="url(#puffyCottonStar)"
-                        stroke="#FFF"
-                        strokeWidth="2.5"
-                        strokeLinejoin="round"
-                      />
-
-                      {/* Soft 3D volumetric light spheres to make it look like fluffy cotton candy mass */}
-                      <circle cx="50" cy="48" r="16" fill="rgba(255, 255, 255, 0.45)" filter="blur(6px)" pointerEvents="none" />
-
-                      {/* Pink bow on left star tip */}
-                      <g transform="translate(0, 0)">
-                        <path d="M 28 30 Q 23 25 28 20 Q 33 25 28 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
-                        <path d="M 28 30 Q 33 35 28 40 Q 23 35 28 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
-                        <circle cx="28" cy="30" r="2.5" fill="#FFCCDD" stroke="#FFF" strokeWidth="0.8" />
-                      </g>
-
-                      {/* Blushing cheeks */}
-                      <ellipse cx="36" cy="54" rx="5" ry="3" fill="#FF799C" opacity="0.6" />
-                      <ellipse cx="64" cy="54" rx="5" ry="3" fill="#FF799C" opacity="0.6" />
-
-                      {/* Cute Eyes & Mouth */}
-                      <g transform="translate(0, 0)">
-                        {petState === "sleeping" || expression === "blink" ? (
-                          <>
-                            <path d="M 38 46 Q 42 50 46 46" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                            <path d="M 54 46 Q 58 50 62 46" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                          </>
-                        ) : expression === "happy" ? (
-                          <>
-                            <circle cx="41" cy="48" r="3.5" fill="#6E4B55" />
-                            <circle cx="59" cy="48" r="3.5" fill="#6E4B55" />
-                            <circle cx="39.5" cy="46" r="1.2" fill="#FFF" />
-                            <circle cx="57.5" cy="46" r="1.2" fill="#FFF" />
-                          </>
-                        ) : expression === "shy" ? (
-                          <>
-                            <circle cx="41" cy="47" r="2.5" fill="#6E4B55" />
-                            <circle cx="59" cy="47" r="2.5" fill="#6E4B55" />
-                          </>
-                        ) : (
-                          <>
-                            <path d="M 37 47 L 43 47 M 40 44 L 40 50" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d="M 57 47 L 63 47 M 60 44 L 60 50" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" />
-                          </>
-                        )}
-
-                        {/* Cute mouth */}
-                        {petState === "sleeping" ? (
-                          <path d="M 48 53 Q 50 51 52 53" stroke="#6E4B55" strokeWidth="2" strokeLinecap="round" fill="none" />
-                        ) : expression === "happy" || expression === "glow" ? (
-                          <path d="M 46 54 Q 50 58 54 54" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                        ) : (
-                          <path d="M 47 54 Q 50 56 53 54" stroke="#6E4B55" strokeWidth="2.2" strokeLinecap="round" fill="none" />
-                        )}
-                      </g>
-                    </>
+                {/* Feeding floating food items indicator */}
+                <AnimatePresence>
+                  {feedEffect && (
+                    <motion.div
+                      initial={{ scale: 0.5, y: 35, opacity: 0 }}
+                      animate={{ scale: [1, 1.5, 0.9], y: [10, -40, -80], opacity: [0, 1, 1, 0] }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 1.3, ease: "easeOut" }}
+                      className="absolute text-4xl z-30 left-7 top-[-35px] filter drop-shadow-md"
+                    >
+                      {feedEffect}
+                    </motion.div>
                   )}
-                </svg>
+                </AnimatePresence>
 
-                <div className="absolute top-2 left-6 text-yellow-300 text-sm animate-pulse">⭐</div>
-                <div className="absolute bottom-6 right-3 text-pink-400 text-sm animate-ping">✨</div>
-              </motion.div>
-            </div>
+                {/* Floating sleep Zzz letters if sleeping */}
+                {petState === "sleeping" && (
+                  <div className="absolute top-[-30px] right-[-10px] z-30 flex flex-col pointer-events-none select-none">
+                    <motion.span 
+                      animate={{ y: [-5, -25], x: [0, 8, 0], opacity: [0, 1, 0], scale: [0.8, 1.2, 0.9] }} 
+                      transition={{ repeat: Infinity, duration: 2, delay: 0 }}
+                      className="text-xs font-bold text-[#FF799C]"
+                    >
+                      z
+                    </motion.span>
+                    <motion.span 
+                      animate={{ y: [-5, -25], x: [0, -6, 0], opacity: [0, 1, 0], scale: [0.8, 1.3, 0.9] }} 
+                      transition={{ repeat: Infinity, duration: 2, delay: 0.6 }}
+                      className="text-sm font-bold text-[#FF799C]/80 ml-2"
+                    >
+                      Z
+                    </motion.span>
+                    <motion.span 
+                      animate={{ y: [-5, -25], x: [0, 10, 0], opacity: [0, 1, 0], scale: [0.8, 1.4, 0.9] }} 
+                      transition={{ repeat: Infinity, duration: 2, delay: 1.2 }}
+                      className="text-md font-bold text-[#FF799C]/60 ml-4"
+                    >
+                      Z
+                    </motion.span>
+                  </div>
+                )}
+
+                {/* Halo background light glow */}
+                <div className="absolute inset-0 m-auto h-24 w-24 rounded-full bg-gradient-to-tr from-[#FF799C]/20 to-[#FFD5E0]/45 blur-xl pointer-events-none" />
+
+                {/* Main star with dynamic animation */}
+                <motion.div
+                  className="relative flex items-center justify-center cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStarClick();
+                  }}
+                  animate={isDancing ? {
+                    scale: [1, 1.25, 0.9, 1.18, 1],
+                    rotate: [0, 18, -18, 6, 0],
+                    y: [0, -30, 12, -6, 0]
+                  } : petState === "sleeping" ? {
+                    y: [0, -3, 0],
+                    rotate: [18, 20, 16, 18] // Comfortable sleep tilt
+                  } : petState === "sitting" ? {
+                    y: [0, -2, 0],
+                    scale: 0.96, // Comfy squish
+                    rotate: [0, 1, -1, 0]
+                  } : {
+                    y: [0, -7, 0],
+                    rotate: [0, 0.6, -0.6, 0]
+                  }}
+                  transition={isDancing ? {
+                    duration: 0.85,
+                    ease: "easeInOut"
+                  } : petState === "sleeping" ? {
+                    duration: 5.5,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  } : {
+                    duration: 4.8,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                >
+                  <svg
+                    width="135"
+                    height="135"
+                    viewBox="0 0 100 100"
+                    className="filter drop-shadow-[0_8px_18px_rgba(255,121,156,0.35)] overflow-visible"
+                  >
+                    {currentCustomSkin ? (
+                      <image
+                        href={currentCustomSkin}
+                        x="0"
+                        y="0"
+                        width="100"
+                        height="100"
+                        filter="url(#puffyCottonStar)"
+                      />
+                    ) : (
+                      <>
+                        <path
+                          d="M 50 5 L 63 37 L 97 37 L 70 58 L 81 92 L 50 72 L 19 92 L 30 58 L 3 37 L 37 37 Z"
+                          fill="url(#compStarGrad)"
+                          filter="url(#puffyCottonStar)"
+                          stroke="#FFF"
+                          strokeWidth="2.5"
+                          strokeLinejoin="round"
+                        />
+                        <circle cx="50" cy="48" r="16" fill="rgba(255, 255, 255, 0.45)" filter="blur(6px)" pointerEvents="none" />
+                        <g>
+                          <path d="M 28 30 Q 23 25 28 20 Q 33 25 28 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                          <path d="M 28 30 Q 33 35 28 40 Q 23 35 28 30 Z" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                          <circle cx="28" cy="30" r="2.5" fill="#FFCCDD" stroke="#FFF" strokeWidth="0.8" />
+                        </g>
+
+                        <ellipse cx="36" cy="54" rx="5" ry="3" fill="#FF799C" opacity="0.6" />
+                        <ellipse cx="64" cy="54" rx="5" ry="3" fill="#FF799C" opacity="0.6" />
+
+                        <g transform="translate(0, 0)">
+                          {petState === "sleeping" || expression === "blink" ? (
+                            <>
+                              <path d="M 38 46 Q 42 50 46 46" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                              <path d="M 54 46 Q 58 50 62 46" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                            </>
+                          ) : expression === "happy" ? (
+                            <>
+                              <circle cx="41" cy="48" r="3.5" fill="#6E4B55" />
+                              <circle cx="59" cy="48" r="3.5" fill="#6E4B55" />
+                              <circle cx="39.5" cy="46" r="1.2" fill="#FFF" />
+                              <circle cx="57.5" cy="46" r="1.2" fill="white" />
+                            </>
+                          ) : expression === "shy" ? (
+                            <>
+                              <circle cx="41" cy="47" r="2.5" fill="#6E4B55" />
+                              <circle cx="59" cy="47" r="2.5" fill="#6E4B55" />
+                            </>
+                          ) : (
+                            <>
+                              <path d="M 37 47 L 43 47 M 40 44 L 40 50" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" />
+                              <path d="M 57 47 L 63 47 M 60 44 L 60 50" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" />
+                            </>
+                          )}
+
+                          {petState === "sleeping" ? (
+                            <path d="M 48 53 Q 50 51 52 53" stroke="#6E4B55" strokeWidth="2" strokeLinecap="round" fill="none" />
+                          ) : expression === "happy" || expression === "glow" ? (
+                            <path d="M 46 54 Q 50 58 54 54" stroke="#6E4B55" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                          ) : (
+                            <path d="M 47 54 Q 50 56 53 54" stroke="#6E4B55" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+                          )}
+                        </g>
+                      </>
+                    )}
+                  </svg>
+
+                  <div className="absolute top-2 left-6 text-yellow-300 text-sm animate-pulse">⭐</div>
+                  <div className="absolute bottom-6 right-3 text-pink-400 text-sm animate-ping">✨</div>
+                </motion.div>
+              </div>
+            )}
           </div>
 
           {/* Guide hint info */}
@@ -1968,6 +2880,200 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
         {/* RIGHT COLUMN: COPARENT CONTROL PANEL AND FRIENDS (5 Cols) */}
         <div className="lg:col-span-5 flex flex-col gap-4 text-left">
+          
+          {/* 🏡 CUTE STAR PET HOME CONSOLE (Single and Coparent modes) */}
+          {(activeTab === "single" || activeTab === "coparent") && (
+            <div className="bg-gradient-to-br from-[#FFF5F7] to-white border-2 border-[#FF799C]/20 rounded-3xl p-4 shadow-sm space-y-4">
+              <div className="flex justify-between items-center pb-2.5 border-b border-[#FF799C]/10">
+                <h3 className="text-sm font-bold text-[#6E4B55] flex items-center gap-1.5">
+                  <span className="text-lg">🏡</span>
+                  <span>星寵專屬家園控制台</span>
+                </h3>
+                <span className="text-[10px] bg-[#FF799C] text-white px-2.5 py-0.5 rounded-full font-bold">
+                  {getActivePetsList().length} 隻星寵
+                </span>
+              </div>
+
+              {/* 1. HOME SWITCHER */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-[#6E4B55]/80 flex items-center gap-1">
+                  <span>🗺️ 切換拜訪家園 :</span>
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["home_star", "home_pig", "home_dog"] as const).map((homeId) => {
+                    const isSelected = getEffectiveHomeId() === homeId;
+                    const residents = getActivePetsList().filter((p) => p.currentHome === homeId);
+                    return (
+                      <button
+                        key={homeId}
+                        onClick={() => {
+                          if (activeTab === "single") {
+                            setCurrentHomeId(homeId);
+                            // Automatically set focus on the first resident pet of this home if available
+                            if (residents.length > 0) {
+                              selectFocusedPet(residents[0].id);
+                            } else {
+                              // Find any pet of this species, or fallback
+                              const matches = pets.find((p) => {
+                                if (homeId === "home_star") return p.species === "star";
+                                if (homeId === "home_pig") return p.species === "pig";
+                                if (homeId === "home_dog") return p.species === "dog";
+                                return false;
+                              });
+                              if (matches) {
+                                selectFocusedPet(matches.id);
+                              }
+                            }
+                            setBubbleText(`✨ 傳送到「${getHomeName(homeId)}」！來照顧這裡的小可愛吧！💖`);
+                          } else if (activeTab === "coparent") {
+                            let targetPetId = "star";
+                            if (residents.length > 0) {
+                              targetPetId = residents[0].id;
+                            } else {
+                              const matches = getActivePetsList().find((p) => {
+                                if (homeId === "home_star") return p.species === "star";
+                                if (homeId === "home_pig") return p.species === "pig";
+                                if (homeId === "home_dog") return p.species === "dog";
+                                return false;
+                              });
+                              if (matches) targetPetId = matches.id;
+                            }
+                            executeCoparentAction("switch-home-and-focus", { homeId, petId: targetPetId });
+                          }
+                        }}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-bold flex flex-col items-center justify-center gap-1 border-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-[#FFF0F3] border-[#FF799C] text-[#FF799C] shadow-xs"
+                            : "bg-white border-gray-100 hover:border-[#FF799C]/30 text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        <span className="text-md">
+                          {homeId === "home_star" ? "🌌" : homeId === "home_pig" ? "🍓" : "🐾"}
+                        </span>
+                        <span className="scale-90 font-sans tracking-tight">
+                          {homeId === "home_star" ? "星空房" : homeId === "home_pig" ? "甜心房" : "萌犬房"}
+                        </span>
+                        <span className={`text-[8px] px-1 rounded-full ${
+                          residents.length > 0 ? "bg-[#FF799C]/10 text-[#FF799C]" : "bg-gray-100 text-gray-400"
+                        }`}>
+                          {residents.length > 0 ? `${residents.length} 隻` : "閒置"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. HATCHING STAR EGG */}
+              <div className="bg-[#FFF8F9] border border-[#FF799C]/10 rounded-2xl p-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl select-none animate-bounce duration-1000">🥚</span>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[11px] font-bold text-[#6E4B55]">孵化星星蛋</span>
+                    <span className="text-[9px] text-gray-400 font-sans">
+                      隨機孵化出小蜜豬 🐷 或小奶犬 🐶
+                    </span>
+                    <span className="text-[10px] text-[#FF799C] font-black font-mono flex items-center gap-0.5 mt-0.5">
+                      🪙 200 星星幣 / 顆
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleHatchEgg}
+                  className="bg-[#FF799C] hover:bg-[#FF799C]/90 text-white rounded-xl py-2 px-3 text-[10.5px] font-black tracking-wider transition-all active:scale-95 shadow-xs cursor-pointer shrink-0"
+                >
+                  ✨ 購買並孵化
+                </button>
+              </div>
+
+              {/* 3. CO-HABITATION AND PET TRANSFER */}
+              <div className="space-y-2 pt-1 border-t border-[#FF799C]/5">
+                <span className="text-[11px] font-bold text-[#6E4B55]/80 flex items-center gap-1">
+                  <span>🚚 寵物居住地調整與召喚 :</span>
+                </span>
+                <div className="space-y-2 max-h-[170px] overflow-y-auto pr-1">
+                  {getActivePetsList().map((p) => {
+                    const isCurrentHome = p.currentHome === getEffectiveHomeId();
+                    const defaultHome = p.species === "star" ? "home_star" : p.species === "pig" ? "home_pig" : "home_dog";
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          if (activeTab === "single") {
+                            selectFocusedPet(p.id);
+                          } else if (activeTab === "coparent") {
+                            executeCoparentAction("switch-home-and-focus", { homeId: p.currentHome, petId: p.id });
+                          }
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-xl border transition-all text-left cursor-pointer ${
+                          getEffectiveFocusedPetId() === p.id
+                            ? "bg-[#FFF0F3]/45 border-[#FF799C]/25 shadow-xs"
+                            : "bg-white/80 border-gray-100 hover:bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl select-none">
+                            {p.species === "star" ? "🌟" : p.species === "pig" ? "🐷" : "🐶"}
+                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-[#6E4B55] flex items-center gap-1">
+                              {p.name}
+                              <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded-full font-mono">
+                                Lvl {p.level || 1}
+                              </span>
+                            </span>
+                            <span className="text-[8px] text-gray-400 font-sans leading-none mt-0.5">
+                              居住：{getHomeName(p.currentHome)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* If not in current home, show Summon button */}
+                          {!isCurrentHome ? (
+                            <button
+                              onClick={() => movePetToHome(p.id, getEffectiveHomeId() as any)}
+                              className="bg-[#FFF4F6] hover:bg-[#FFE0E6] text-[#FF799C] border border-[#FF799C]/15 rounded-lg py-1 px-2 text-[9px] font-bold transition-all active:scale-95 cursor-pointer"
+                              title="將牠召喚到當前房間一起合養"
+                            >
+                              🚚 召喚至此房
+                            </button>
+                          ) : (
+                            <div className="flex gap-1">
+                              {/* If in current home, show dropdown/transfer buttons */}
+                              {(["home_star", "home_pig", "home_dog"] as const)
+                                .filter((h) => h !== getEffectiveHomeId())
+                                .map((h) => (
+                                  <button
+                                    key={h}
+                                    onClick={() => movePetToHome(p.id, h)}
+                                    className="bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700 border border-gray-100 rounded-lg py-1 px-1.5 text-[8.5px] font-bold transition-all active:scale-95 cursor-pointer"
+                                    title={`移居至 ${getHomeName(h)}`}
+                                  >
+                                    移至 {h === "home_star" ? "🌌" : h === "home_pig" ? "🍓" : "🐾"}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+
+                          {/* Quick return shortcut if not in default home */}
+                          {p.currentHome !== defaultHome && (
+                            <button
+                              onClick={() => movePetToHome(p.id, defaultHome as any)}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/50 rounded-lg py-1 px-1.5 text-[8.5px] font-bold transition-all active:scale-95 cursor-pointer"
+                              title="回原生家園"
+                            >
+                              🏠 歸位
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* STATS PANEL */}
           <div className="bg-white/60 border border-[#FF799C]/15 rounded-2xl p-4 space-y-3">
@@ -2986,6 +4092,165 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                     </div>
                   );
                 })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 🥚✨ INTERACTIVE STAR EGG HATCHING OVERLAY MODAL */}
+        {isHatching && hatchedPet && (
+          <div className="fixed inset-0 bg-[#281A2C]/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              className="bg-gradient-to-br from-[#1C0D24] to-[#2E1834] rounded-[40px] p-8 max-w-md w-full border-4 border-[#FFCCD9]/30 shadow-[0_0_50px_rgba(255,121,156,0.3)] relative overflow-hidden text-center text-white"
+            >
+              {/* Starry starry backdrop sparkles */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,121,156,0.15)_0%,transparent_70%)] pointer-events-none" />
+              <div className="absolute top-10 left-10 text-xl opacity-40 animate-ping">✨</div>
+              <div className="absolute bottom-10 right-10 text-lg opacity-40 animate-pulse">🌟</div>
+              <div className="absolute top-1/4 right-8 text-2xl opacity-20 animate-bounce">🌙</div>
+
+              <h2 className="text-lg font-black tracking-widest text-[#FFCCD9] mb-6 flex items-center justify-center gap-2">
+                <span>✨ 星際能量孕育中 ✨</span>
+              </h2>
+
+              {/* Egg Stages Container */}
+              <div className="h-48 flex items-center justify-center relative mb-6">
+                {hatchingEggPhase === "egg_idle" && (
+                  <motion.div
+                    animate={{ y: [-10, 10, -10] }}
+                    transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                    className="text-[90px] filter drop-shadow-[0_10px_20px_rgba(255,121,156,0.3)] select-none cursor-pointer"
+                  >
+                    🥚
+                  </motion.div>
+                )}
+
+                {hatchingEggPhase === "egg_shake" && (
+                  <motion.div
+                    animate={{ rotate: [0, -12, 12, -15, 15, -8, 8, 0], scale: [1, 1.05, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.45 }}
+                    className="text-[90px] filter drop-shadow-[0_10px_20px_rgba(255,121,156,0.5)] select-none"
+                  >
+                    🥚⚡
+                  </motion.div>
+                )}
+
+                {hatchingEggPhase === "egg_burst" && (
+                  <motion.div
+                    animate={{ scale: [1, 1.8, 0], rotate: [0, 180, 360] }}
+                    transition={{ duration: 0.8 }}
+                    className="text-[100px] filter drop-shadow-[0_0_40px_#FF799C] select-none"
+                  >
+                    💥
+                  </motion.div>
+                )}
+
+                {hatchingEggPhase === "egg_reveal" && (
+                  <motion.div
+                    initial={{ scale: 0.3, rotate: -45, opacity: 0 }}
+                    animate={{ scale: [0.3, 1.25, 1], rotate: 0, opacity: 1 }}
+                    transition={{ duration: 0.9, type: "spring" }}
+                    className="relative flex flex-col items-center justify-center"
+                  >
+                    {/* Glowing gold halo */}
+                    <div className="absolute h-36 w-36 rounded-full bg-gradient-to-tr from-[#FF799C]/40 to-[#FFE39C]/60 blur-2xl animate-pulse" />
+                    
+                    {/* Species Vector rendering inside the modal */}
+                    <div className="relative w-32 h-32 flex items-center justify-center filter drop-shadow-[0_15px_25px_rgba(255,121,156,0.4)]">
+                      <svg viewBox="0 0 100 100" className="w-28 h-28">
+                        <defs>
+                          <radialGradient id="compPigGradModal" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stopColor="#FFF0F5" />
+                            <stop offset="100%" stopColor="#FFCCD9" />
+                          </radialGradient>
+                          <radialGradient id="compDogGradModal" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stopColor="#FFFBF0" />
+                            <stop offset="100%" stopColor="#FFE0B2" />
+                          </radialGradient>
+                        </defs>
+                        
+                        {hatchedPet.species === "pig" ? (
+                          <>
+                            <ellipse cx="50" cy="55" rx="38" ry="34" fill="url(#compPigGradModal)" stroke="#FFF" strokeWidth="2" />
+                            <path d="M 22 28 Q 16 12 32 18 Z" fill="#FFCCD9" stroke="#FFF" strokeWidth="1.2" />
+                            <path d="M 78 28 Q 84 12 68 18 Z" fill="#FFCCD9" stroke="#FFF" strokeWidth="1.2" />
+                            <ellipse cx="50" cy="62" rx="12" ry="8" fill="#FF799C" stroke="#FFF" strokeWidth="1" />
+                            <ellipse cx="45" cy="62" rx="2" ry="3.5" fill="#6E4B55" />
+                            <ellipse cx="55" cy="62" rx="2" ry="3.5" fill="#6E4B55" />
+                          </>
+                        ) : (
+                          <>
+                            <ellipse cx="50" cy="55" rx="36" ry="32" fill="url(#compDogGradModal)" stroke="#FFF" strokeWidth="2" />
+                            <path d="M 16 35 C 8 30 4 55 12 65 C 20 75 22 50 18 35 Z" fill="#A77443" stroke="#FFF" strokeWidth="1.2" />
+                            <path d="M 84 35 C 92 30 96 55 88 65 C 80 75 78 50 82 35 Z" fill="#A77443" stroke="#FFF" strokeWidth="1.2" />
+                            <ellipse cx="50" cy="62" rx="14" ry="10" fill="#FFF" opacity="0.8" />
+                            <path d="M 46 56 Q 50 53 54 56 Q 54 59 50 62 Q 46 59 46 56 Z" fill="#4E3629" />
+                          </>
+                        )}
+                        <ellipse cx="36" cy="50" rx="4.5" ry="3" fill="#FF799C" opacity="0.6" />
+                        <ellipse cx="64" cy="50" rx="4.5" ry="3" fill="#FF799C" opacity="0.6" />
+                        <circle cx="41" cy="46" r="3" fill="#6E4B55" />
+                        <circle cx="59" cy="46" r="3" fill="#6E4B55" />
+                        <circle cx="39.5" cy="44.5" r="1" fill="#FFF" />
+                        <circle cx="57.5" cy="44.5" r="1" fill="#FFF" />
+                        <path d="M 46 53 Q 50 57 54 53" stroke="#6E4B55" strokeWidth="2" strokeLinecap="round" fill="none" />
+                      </svg>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Descriptions & Renaming Actions */}
+              <div className="space-y-4">
+                {hatchingEggPhase !== "egg_reveal" ? (
+                  <p className="text-xs text-[#FFCCD9]/80 font-medium leading-relaxed font-sans px-4">
+                    {hatchingEggPhase === "egg_idle" && "🌟 星塵能量正在向蛋殼中心匯聚，請耐心等待奇蹟降臨... 🔮"}
+                    {hatchingEggPhase === "egg_shake" && "⚡ 哇！蛋殼開始出現了密密麻麻的裂縫！好像有什麼要蹦出來了！✨"}
+                    {hatchingEggPhase === "egg_burst" && "💥 啪嚓！星際之光綻放，星寵寶寶誕生囉！🎉"}
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-md font-bold text-yellow-300">🎉 恭喜獲得全新星寵！</h3>
+                      <p className="text-xs text-pink-200 mt-1">
+                        您成功孵化了一隻超可愛的【{getSpeciesName(hatchedPet.species)}】！
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-1.5 bg-white/5 border border-white/10 rounded-2xl p-3.5">
+                      <span className="text-[10px] text-pink-300 font-bold">🌸 給新星寵起個特別的名字吧 :</span>
+                      <input
+                        type="text"
+                        value={hatchedPet.name}
+                        onChange={(e) => {
+                          const newName = e.target.value;
+                          setHatchedPet(prev => prev ? { ...prev, name: newName } : null);
+                          updatePet(hatchedPet.id, { name: newName });
+                          // Also sync focused states if selected
+                          if (focusedPetId === hatchedPet.id) {
+                            setSoloPetName(newName);
+                          }
+                        }}
+                        className="bg-white text-gray-800 text-center text-xs font-black rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#FF799C] max-w-xs border border-white/20 shadow-inner"
+                        placeholder="替寶貝取名..."
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setIsHatching(false);
+                        setHatchedPet(null);
+                        setBubbleText(`🎉 歡迎新成員「${hatchedPet.name}」正式加入我們的星寵大家庭！快和牠一起合養互動吧！🩷🫧`);
+                      }}
+                      className="w-full bg-[#FF799C] hover:bg-[#FF799C]/90 text-white rounded-2xl py-3 text-xs font-black tracking-wider transition-all shadow-[0_4px_12px_rgba(255,121,156,0.3)] active:scale-95 cursor-pointer mt-2"
+                    >
+                      帶牠進入家園 🏡✨
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

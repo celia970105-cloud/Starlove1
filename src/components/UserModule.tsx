@@ -898,44 +898,6 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                 </h3>
               </div>
 
-              {/* Star Coins Balance Card */}
-              <div className="bg-gradient-to-r from-amber-400/15 to-[#FF799C]/15 border border-amber-300/40 p-4 rounded-2xl shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-amber-100 p-2.5 rounded-xl border border-amber-200/50 animate-pulse">
-                    <Sparkles className="h-5 w-5 text-amber-500" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs text-[#6E4B55]/70 font-semibold">✨ 我的專屬星星幣 ✦</h4>
-                    <p className="text-2xl font-serif font-bold text-amber-600 flex items-center gap-1.5 mt-0.5">
-                      <span>{currentUser.star_coins ?? 100}</span>
-                      <span className="text-xs font-sans font-normal text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-md">🪙 COINS</span>
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch("/api/dev/trigger-hourly-coins", { method: "POST" });
-                      if (res.ok) {
-                        const data = await res.json();
-                        alert(data.message);
-                        if (refreshCurrentUser) {
-                          refreshCurrentUser();
-                        }
-                      } else {
-                        alert("領取時光收益失敗");
-                      }
-                    } catch (e) {
-                      console.error("Hourly trigger error:", e);
-                    }
-                  }}
-                  className="text-[10px] bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-xl font-medium transition-all active:scale-95 shadow-sm shadow-amber-500/10 cursor-pointer"
-                >
-                  ⏱️ 領取時光收益 (+20)
-                </button>
-              </div>
 
               {/* Profile Statistics Bento Row */}
               <div className="grid grid-cols-3 gap-3">

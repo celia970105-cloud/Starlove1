@@ -395,10 +395,27 @@ export default function GalleryModule({ currentUser, onRefreshData }: GalleryMod
                 應援相片投稿
               </h3>
               <p className="text-xs text-[#6E4B55]/60 mb-6">
-                {currentUser ? `親愛的 ${currentUser.username}，請分享你的珍貴應援照：` : "分享你珍藏的應援照：(非登入用戶投稿需審核)"}
+                {currentUser && !currentUser.is_guest ? `親愛的 ${currentUser.username}，請分享你的珍貴應援照：` : "分享你珍藏的應援照："}
               </p>
 
-              {submitSuccess ? (
+              {!currentUser || currentUser.is_guest ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center text-[#6E4B55] space-y-4">
+                  <div className="h-16 w-16 bg-[#FF799C]/10 text-[#FF799C] rounded-full flex items-center justify-center animate-pulse">
+                    <Camera className="h-8 w-8" />
+                  </div>
+                  <p className="text-base font-semibold font-serif text-[#FF799C]">星光同盟限定功能 💖</p>
+                  <p className="text-xs text-[#6E4B55]/70 max-w-xs leading-relaxed">
+                    親愛的星星同盟，相片投稿功能僅開放給【已登入使用者】。請先前往「個人中心」註冊或登入您的帳號，即可獲得 50 星星幣並參與星光相簿應援！✨
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="mt-2 px-6 py-2.5 bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] hover:opacity-90 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    我知道了
+                  </button>
+                </div>
+              ) : submitSuccess ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center text-[#FF799C]">
                   <Check className="h-16 w-16 mb-4 animate-bounce bg-[#FF799C]/10 p-3 rounded-full" />
                   <p className="text-lg font-serif">相片上傳成功！</p>

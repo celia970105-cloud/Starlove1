@@ -199,9 +199,14 @@ export async function getDbKey(key: string): Promise<any> {
   try {
     let result: any = null;
     if (key === "users") {
+      console.log(`[Supabase Read] Querying public.profiles...`);
       const { data, error } = await supabase.from("profiles").select("*");
-      if (error) throw error;
+      if (error) {
+        console.error(`[Supabase Read Error] Failed to fetch profiles:`, error);
+        throw error;
+      }
       result = data || [];
+      console.log(`[Supabase Read Success] Fetched ${result.length} profiles.`);
 
       // Merge remote profiles with local/backup users to avoid losing registered users
       for (const localU of localUsers) {
@@ -209,6 +214,7 @@ export async function getDbKey(key: string): Promise<any> {
           result.push(localU);
           // Try to upload the recovered user to Supabase profiles table
           try {
+            console.log(`[Supabase Sync] Syncing recovered user [${localU.username}] to profiles...`);
             await supabase.from("profiles").upsert({
               id: localU.id,
               username: localU.username,
@@ -223,7 +229,7 @@ export async function getDbKey(key: string): Promise<any> {
               solo_pet: localU.solo_pet || null
             });
           } catch (e) {
-            console.warn("Auto-syncing recovered user to Supabase failed:", e);
+            console.warn("[Supabase Sync Warning] Auto-syncing recovered user to Supabase failed:", e);
           }
         }
       }
@@ -244,9 +250,14 @@ export async function getDbKey(key: string): Promise<any> {
         }
       }
 
+      console.log(`[Supabase Read] Querying public.posts for type [${type}]...`);
       const { data, error } = await supabase.from("posts").select("*").eq("type", type);
-      if (error) throw error;
+      if (error) {
+        console.error(`[Supabase Read Error] Failed to fetch posts for type [${type}]:`, error);
+        throw error;
+      }
       result = data || [];
+      console.log(`[Supabase Read Success] Fetched ${result.length} posts for type [${type}].`);
 
       // Merge local posts with remote posts to prevent any local submissions from being wiped out
       for (const localP of localPosts) {
@@ -254,14 +265,18 @@ export async function getDbKey(key: string): Promise<any> {
           result.push(localP);
           // Try to sync/upload this post to Supabase
           try {
+            console.log(`[Supabase Sync] Uploading recovered post [${localP.id}] to Supabase posts table...`);
             await supabase.from("posts").upsert({
               id: localP.id,
               user_id: localP.user_id || "anonymous",
               username: localP.username || "Anonymous",
+              avatar: localP.avatar || null,
               type: type,
               title: localP.title || null,
               image_url: localP.image_url || null,
+              images: localP.image_url || null,
               video_url: localP.video_url || null,
+              videos: localP.video_url || null,
               audio_url: localP.audio_url || null,
               content: localP.content || null,
               category: localP.category || null,
@@ -274,24 +289,36 @@ export async function getDbKey(key: string): Promise<any> {
               created_at: localP.created_at || new Date().toISOString()
             });
           } catch (e) {
-            console.warn("Auto-syncing recovered post to Supabase failed:", e);
+            console.warn("[Supabase Sync Warning] Auto-syncing recovered post to Supabase failed:", e);
           }
         }
       }
     } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
+      console.log(`[Supabase Read] Querying public.${key}...`);
       const { data, error } = await supabase.from(key).select("*");
-      if (error) throw error;
+      if (error) {
+        console.error(`[Supabase Read Error] Failed to fetch [${key}]:`, error);
+        throw error;
+      }
       result = data;
+      console.log(`[Supabase Read Success] Fetched ${result?.length || 0} items for [${key}].`);
     } else {
+      console.log(`[Supabase Read] Querying starry_state for key [${key}]...`);
       const { data, error } = await supabase
         .from("starry_state")
         .select("value")
         .eq("key", key)
         .maybeSingle();
-      if (!error && data) result = data.value;
+      if (!error && data) {
+        result = data.value;
+        console.log(`[Supabase Read Success] Fetched state value for [${key}].`);
+      } else if (error) {
+        console.error(`[Supabase Read Error] Failed to fetch starry_state for key [${key}]:`, error);
+      }
     }
 
     if (result === null) {
+      console.log(`[Supabase Read Status] Key [${key}] is null, setting default value.`);
       await setDbKey(key, defaultValue);
       return defaultValue;
     }
@@ -299,7 +326,7 @@ export async function getDbKey(key: string): Promise<any> {
     localStorage.setItem(`starry_local_${key}`, JSON.stringify(result));
     return result;
   } catch (err) {
-    console.warn(`Supabase read failed for key ${key}, falling back to local storage`, err);
+    console.error(`[Supabase Read Fatal Failure] Reading key [${key}] from Supabase failed, falling back to local storage:`, err);
     if (key === "users") {
       localStorage.setItem("starry_local_users", JSON.stringify(localUsers));
       return localUsers;
@@ -326,7 +353,10 @@ export async function getDbKey(key: string): Promise<any> {
 // Helper to write database key
 export async function setDbKey(key: string, value: any): Promise<void> {
   localStorage.setItem(`starry_local_${key}`, JSON.stringify(value));
-  if (!supabase) return;
+  if (!supabase) {
+    console.log(`[Database Native] Supabase is not connected. LocalStorage update success for [${key}]`);
+    return;
+  }
   try {
     if (key === "users") {
       const cleanUsers = value.map((u: any) => ({
@@ -357,18 +387,26 @@ export async function setDbKey(key: string, value: any): Promise<void> {
           solo_pet: null
         });
       }
-      const { error } = await supabase.from("profiles").upsert(cleanUsers);
-      if (error) throw error;
+      console.log(`[Supabase Auth Sync] Upserting users/profiles:`, cleanUsers);
+      const { data, error } = await supabase.from("profiles").upsert(cleanUsers).select();
+      if (error) {
+        console.error(`[Supabase Auth Sync Error] Failed to upsert users to profiles:`, error);
+        throw error;
+      }
+      console.log(`[Supabase Auth Sync Success] Users successfully upserted to profiles:`, data);
     } else if (key.startsWith("posts_")) {
       const type = key.replace("posts_", "");
       const cleanPosts = value.map((p: any) => ({
         id: p.id,
         user_id: p.user_id || "anonymous",
         username: p.username || "Anonymous",
+        avatar: p.avatar || null,
         type: type,
         title: p.title || null,
         image_url: p.image_url || null,
+        images: p.image_url || null,
         video_url: p.video_url || null,
+        videos: p.video_url || null,
         audio_url: p.audio_url || null,
         content: p.content || null,
         category: p.category || null,
@@ -380,24 +418,41 @@ export async function setDbKey(key: string, value: any): Promise<void> {
         status: p.status || "pending",
         created_at: p.created_at || new Date().toISOString()
       }));
-      const { error } = await supabase.from("posts").upsert(cleanPosts);
-      if (error) throw error;
+      console.log(`[Supabase Posts Sync] Upserting posts for type [${type}]:`, cleanPosts);
+      const { data, error } = await supabase.from("posts").upsert(cleanPosts).select();
+      if (error) {
+        console.error(`[Supabase Posts Sync Error] Failed to upsert posts for type [${type}]:`, error);
+        throw error;
+      }
+      console.log(`[Supabase Posts Sync Success] Posts for type [${type}] successfully upserted:`, data);
     } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
-      const { error } = await supabase.from(key).upsert(value);
-      if (error) throw error;
+      console.log(`[Supabase Collection Sync] Upserting key [${key}]:`, value);
+      const { data, error } = await supabase.from(key).upsert(value).select();
+      if (error) {
+        console.error(`[Supabase Collection Sync Error] Failed to upsert [${key}]:`, error);
+        throw error;
+      }
+      console.log(`[Supabase Collection Sync Success] Successfully synced [${key}]:`, data);
     } else {
+      console.log(`[Supabase State Sync] Upserting key [${key}] in starry_state:`, value);
       const { error } = await supabase
         .from("starry_state")
         .upsert({ key, value });
       if (error) {
-        await supabase
+        console.warn(`[Supabase State Sync] Initial upsert error, attempting update:`, error);
+        const { error: updateError } = await supabase
           .from("starry_state")
           .update({ value })
           .eq("key", key);
+        if (updateError) {
+          console.error(`[Supabase State Sync Error] Failed to update key [${key}]:`, updateError);
+          throw updateError;
+        }
       }
+      console.log(`[Supabase State Sync Success] Successfully synced state for [${key}]`);
     }
   } catch (err) {
-    console.warn(`Supabase write failed for key ${key}:`, err);
+    console.error(`[Supabase Sync Fatal Failure] Supabase write failed for key [${key}] but stored in localStorage as fallback:`, err);
   }
 }
 

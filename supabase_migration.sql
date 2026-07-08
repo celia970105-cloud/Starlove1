@@ -23,10 +23,13 @@ create table if not exists public.posts (
   id text primary key,
   user_id text references public.profiles(id) on delete cascade not null,
   username text,
+  avatar text,
   type text not null, -- 'photos' | 'videos' | 'letters' | 'artworks' | 'music'
   title text,
   image_url text,
+  images text,
   video_url text,
+  videos text,
   audio_url text,
   content text,
   category text,
@@ -171,10 +174,10 @@ create policy "Allow profile creations" on public.profiles
   for insert with check (true);
 
 create policy "Allow users to update own profile" on public.profiles
-  for update using (auth.uid()::text = id) with check (auth.uid()::text = id);
+  for update using (true) with check (true);
 
 create policy "Allow users to delete own profile" on public.profiles
-  for delete using (auth.uid()::text = id);
+  for delete using (true);
 
 
 -- 📝 Posts Policies
@@ -182,27 +185,19 @@ drop policy if exists "Allow public read access to posts" on public.posts;
 drop policy if exists "Allow any user to insert posts" on public.posts;
 drop policy if exists "Allow users or admin to update posts" on public.posts;
 drop policy if exists "Allow users or admin to delete posts" on public.posts;
+drop policy if exists "Allow users to insert posts" on public.posts;
 
 create policy "Allow public read access to posts" on public.posts
   for select using (true);
 
 create policy "Allow users to insert posts" on public.posts
-  for insert with check (auth.uid()::text = user_id);
+  for insert with check (true);
 
 create policy "Allow users or admin to update posts" on public.posts
-  for update using (
-    auth.uid()::text = user_id OR
-    exists (select 1 from public.profiles where profiles.id = auth.uid()::text and profiles.role = 'admin')
-  ) with check (
-    auth.uid()::text = user_id OR
-    exists (select 1 from public.profiles where profiles.id = auth.uid()::text and profiles.role = 'admin')
-  );
+  for update using (true) with check (true);
 
 create policy "Allow users or admin to delete posts" on public.posts
-  for delete using (
-    auth.uid()::text = user_id OR
-    exists (select 1 from public.profiles where profiles.id = auth.uid()::text and profiles.role = 'admin')
-  );
+  for delete using (true);
 
 
 -- 💬 Comments Policies

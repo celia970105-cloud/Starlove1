@@ -10,9 +10,16 @@ import { AdminPending, AdminAllData, User } from "../types";
 interface AdminModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  registeredUsers?: User[];
+  onRefreshUsers?: () => void;
 }
 
-export default function AdminModule({ currentUser, onRefreshData }: AdminModuleProps) {
+export default function AdminModule({ 
+  currentUser, 
+  onRefreshData, 
+  registeredUsers = [], 
+  onRefreshUsers 
+}: AdminModuleProps) {
   // Tabs: 'pending' (moderation) | 'global_db' | 'site_text'
   const [activeTab, setActiveTab] = useState<"pending" | "global_db" | "site_text">("pending");
   // Sub-category of moderation: 'all' | 'photos' | 'videos' | 'letters' | 'artworks' | 'music' | 'candies'
@@ -28,6 +35,28 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
   const [selectedItemType, setSelectedItemType] = useState<string>("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // Merge registered users from globalData and props to ensure full synchronization
+  const displayedUsersMap = new Map<string, any>();
+  
+  if (Array.isArray(registeredUsers)) {
+    registeredUsers.forEach((u) => {
+      if (u && u.id) {
+        displayedUsersMap.set(u.id, u);
+      }
+    });
+  }
+
+  if (globalData && Array.isArray(globalData.users)) {
+    globalData.users.forEach((u) => {
+      if (u && u.id) {
+        const existing = displayedUsersMap.get(u.id) || {};
+        displayedUsersMap.set(u.id, { ...existing, ...u });
+      }
+    });
+  }
+
+  const displayedUsers = Array.from(displayedUsersMap.values());
 
   // Simulated Site Text Configurations
   const [heroTitle, setHeroTitle] = useState("Starry Wish Support Platform");
@@ -169,6 +198,9 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
         fetchAllData(true);
         if (onRefreshData) {
           onRefreshData();
+        }
+        if (onRefreshUsers) {
+          onRefreshUsers();
         }
         setTimeout(() => setMessage(""), 2500);
       } else {
@@ -493,6 +525,9 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                     music: "🎵 音樂",
                     candies: "🍬 糖果"
                   };
+                  const authorUser = item.user_id && item.user_id !== "anonymous"
+                    ? displayedUsers.find((u: any) => u.id === item.user_id)
+                    : null;
                   return (
                     <div
                       key={item.id}
@@ -532,7 +567,10 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                           </h4>
 
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[#6E4B55]/50 text-[11px] font-mono mt-1">
-                            <span>由 @{item.username || item.author_name || "匿名同盟"} 投遞</span>
+                            <span>
+                              由 @{item.username || item.author_name || "匿名同盟"} 
+                              {authorUser ? ` (${authorUser.email})` : ""} 投遞
+                            </span>
                             <span>•</span>
                             <span>時間: {new Date(item.created_at).toLocaleString("zh-TW")}</span>
                           </div>
@@ -611,10 +649,10 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
                 {/* Users Management */}
                 <div className="space-y-3">
                   <span className="text-xs font-mono font-bold tracking-widest text-[#FF799C] uppercase block text-left">
-                    STARRY USERS ({globalData.users.length})
+                    STARRY USERS ({displayedUsers.length})
                   </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {globalData.users.map((u) => (
+                    {displayedUsers.map((u) => (
                       <div
                         key={u.id}
                         className="flex justify-between items-center p-3.5 rounded-xl bg-white border border-[#FF799C]/10 text-xs shadow-sm hover:border-[#FF799C]/20 transition-all"
@@ -980,61 +1018,75 @@ export default function AdminModule({ currentUser, onRefreshData }: AdminModuleP
               )}
 
               {/* Meta Data Panel */}
-              <div className="bg-[#FFF6F2]/30 rounded-2xl p-3.5 border border-[#FF799C]/10 text-xs space-y-1.5 text-[#6E4B55]/80 mb-5">
-                <div className="flex justify-between">
-                  <span className="font-medium text-[#6E4B55]/60">投稿用戶:</span>
-                  <span className="font-semibold">@{selectedItem.username || selectedItem.author_name || "匿名同盟"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-[#6E4B55]/60">稿件分類:</span>
-                  <span className="font-mono bg-[#FF799C]/10 text-[#FF799C] px-1.5 py-0.2 rounded text-[10px] font-bold">
-                    {selectedItem.category || selectedItem.color_theme || "一般應援"}
-                  </span>
-                </div>
-                {selectedItem.video_url && (
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-[#6E4B55]/60">影片網址:</span>
-                    <a
-                      href={selectedItem.video_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#FF799C] hover:underline flex items-center gap-1 font-mono text-[11px]"
-                    >
-                      開啟外部連結 <Play className="h-2.5 w-2.5" />
-                    </a>
+              {(() => {
+                const authorUser = selectedItem && selectedItem.user_id && selectedItem.user_id !== "anonymous"
+                  ? displayedUsers.find((u: any) => u.id === selectedItem.user_id)
+                  : null;
+                return (
+                  <div className="bg-[#FFF6F2]/30 rounded-2xl p-3.5 border border-[#FF799C]/10 text-xs space-y-1.5 text-[#6E4B55]/80 mb-5">
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-[#6E4B55]/60">投稿用戶:</span>
+                      <div className="text-right">
+                        <span className="font-semibold block">@{selectedItem.username || selectedItem.author_name || "匿名同盟"}</span>
+                        {authorUser && (
+                          <span className="block text-[10px] text-[#6E4B55]/60 font-mono mt-0.5">
+                            {authorUser.email}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-[#6E4B55]/60">稿件分類:</span>
+                      <span className="font-mono bg-[#FF799C]/10 text-[#FF799C] px-1.5 py-0.2 rounded text-[10px] font-bold">
+                        {selectedItem.category || selectedItem.color_theme || "一般應援"}
+                      </span>
+                    </div>
+                    {selectedItem.video_url && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-[#6E4B55]/60">影片網址:</span>
+                        <a
+                          href={selectedItem.video_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#FF799C] hover:underline flex items-center gap-1 font-mono text-[11px]"
+                        >
+                          開啟外部連結 <Play className="h-2.5 w-2.5" />
+                        </a>
+                      </div>
+                    )}
+                    {selectedItem.audio_url && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-[#6E4B55]/60">音源網址:</span>
+                        <a
+                          href={selectedItem.audio_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#FF799C] hover:underline flex items-center gap-1 font-mono text-[11px]"
+                        >
+                          聽取黑膠音軌 <Play className="h-2.5 w-2.5" />
+                        </a>
+                      </div>
+                    )}
+                    {selectedItem.external_link && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-[#6E4B55]/60">外部來源:</span>
+                        <a
+                          href={selectedItem.external_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#FF799C] hover:underline flex items-center gap-1 font-mono text-[11px]"
+                        >
+                          連結 <Play className="h-2.5 w-2.5" />
+                        </a>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="font-medium text-[#6E4B55]/60">投遞時間:</span>
+                      <span className="font-mono">{new Date(selectedItem.created_at).toLocaleString("zh-TW")}</span>
+                    </div>
                   </div>
-                )}
-                {selectedItem.audio_url && (
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-[#6E4B55]/60">音源網址:</span>
-                    <a
-                      href={selectedItem.audio_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#FF799C] hover:underline flex items-center gap-1 font-mono text-[11px]"
-                    >
-                      聽取黑膠音軌 <Play className="h-2.5 w-2.5" />
-                    </a>
-                  </div>
-                )}
-                {selectedItem.external_link && (
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-[#6E4B55]/60">外部來源:</span>
-                    <a
-                      href={selectedItem.external_link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#FF799C] hover:underline flex items-center gap-1 font-mono text-[11px]"
-                    >
-                      連結 <Play className="h-2.5 w-2.5" />
-                    </a>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="font-medium text-[#6E4B55]/60">投遞時間:</span>
-                  <span className="font-mono">{new Date(selectedItem.created_at).toLocaleString("zh-TW")}</span>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Action Buttons */}
               <div className="flex gap-2">

@@ -62,6 +62,9 @@ export default function App() {
   const [candiesTitle, setCandiesTitle] = useState("星願糖果罐");
   const [candiesDesc, setCandiesDesc] = useState("撕開糖紙，剖析極與禹的心動瞬間");
 
+  // State to store and synchronize all registered users
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+
   // Floating pet greeting speech state
   const [companionGreeting, setCompanionGreeting] = useState("所以謝謝你的存在");
   const [showCompanionBubble, setShowCompanionBubble] = useState(true);
@@ -489,6 +492,26 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentUser, activeModule]);
 
+  // Fetch and sync all registered users list to the frontend state
+  const fetchAllUsers = async () => {
+    try {
+      const res = await fetch("/api/users/list");
+      if (res.ok) {
+        const data = await res.json();
+        setRegisteredUsers(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch registered users list in frontend:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllUsers();
+    // Poll every 10 seconds to keep synced in real-time
+    const interval = setInterval(fetchAllUsers, 10000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const handleLoginSuccess = (user: User) => {
     if (user && user.email?.trim().toLowerCase() === "celia970105@gmail.com") {
       user.role = "admin";
@@ -496,11 +519,13 @@ export default function App() {
     setCurrentUser(user);
     localStorage.setItem("starry_current_user", JSON.stringify(user));
     saveUserBackup(user);
+    fetchAllUsers(); // Refresh registered users list immediately on login
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem("starry_current_user");
+    setRegisteredUsers([]); // Clear users list on logout
     setActiveModule("home");
   };
 
@@ -1324,7 +1349,12 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <AdminModule currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+              <AdminModule
+                currentUser={currentUser}
+                onRefreshData={refreshCurrentUser}
+                registeredUsers={registeredUsers}
+                onRefreshUsers={fetchAllUsers}
+              />
             </motion.div>
           )}
         </AnimatePresence>

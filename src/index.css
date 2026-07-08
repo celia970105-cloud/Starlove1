@@ -1,10 +1,36 @@
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Noto+Sans+TC:wght@300;400;500&family=Playfair+Display:ital,wght@0,300..600;1,300..600&family=JetBrains+Mono:wght@300;400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&family=Playfair+Display:ital,wght@0,300..600;1,300..600&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Fredoka", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Fredoka", "Playfair Display", Georgia, serif;
+  --font-sans: "Fredoka", "M PLUS Rounded 1c", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fredoka", "M PLUS Rounded 1c", "Playfair Display", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Global Font Overrides for Cute & Bold Look */
+body, button, input, select, textarea {
+  font-family: "Fredoka", "M PLUS Rounded 1c", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif !important;
+  letter-spacing: 0.02em;
+}
+
+/* Force standard font weight classes to be a notch bolder & cuter */
+.font-light, .font-thin {
+  font-weight: 500 !important;
+}
+.font-normal {
+  font-weight: 600 !important;
+}
+.font-medium {
+  font-weight: 700 !important;
+}
+.font-semibold {
+  font-weight: 700 !important;
+}
+.font-bold {
+  font-weight: 800 !important;
+}
+.font-extrabold {
+  font-weight: 900 !important;
 }
 
 /* Custom Scrollbar */

@@ -35,6 +35,28 @@ export default function AdminModule({
   const [selectedItemType, setSelectedItemType] = useState<string>("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [approvedSearchQuery, setApprovedSearchQuery] = useState("");
+
+  const getApprovedPostsList = () => {
+    if (!globalData) return [];
+    const approved: any[] = [];
+    const categories = ["photos", "videos", "letters", "artworks", "music", "candies"] as const;
+    
+    categories.forEach(cat => {
+      const list = globalData[cat];
+      if (Array.isArray(list)) {
+        list.forEach((item: any) => {
+          if (item && item.status === "approved") {
+            approved.push({ ...item, _categoryKey: cat });
+          }
+        });
+      }
+    });
+
+    // Sort by created_at descending
+    approved.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return approved;
+  };
 
   // Merge registered users from globalData and props to ensure full synchronization
   const displayedUsersMap = new Map<string, any>();
@@ -390,8 +412,8 @@ export default function AdminModule({
           onClick={() => setActiveTab("global_db")}
           className={`px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${activeTab === "global_db" ? "bg-[#FF799C] text-white shadow-md shadow-[#FF799C]/15" : "text-[#6E4B55]/70 bg-[#FF799C]/5 hover:bg-[#FF799C]/10"}`}
         >
-          <Users className="h-3.5 w-3.5" />
-          <span>全局應援庫 (Global DB)</span>
+          <Trash2 className="h-3.5 w-3.5" />
+          <span>刪除已通過稿件</span>
         </button>
 
         <button
@@ -628,7 +650,7 @@ export default function AdminModule({
         )}
 
         {activeTab === "global_db" && (
-          /* Global DB Tab (Delete / Cleanup approved posts and users) */
+          /* Approved Submissions Manager Tab (Delete already approved posts via search) */
           <motion.div
             key="global-db"
             initial={{ opacity: 0, y: 5 }}
@@ -636,83 +658,168 @@ export default function AdminModule({
             exit={{ opacity: 0, y: -5 }}
             className="space-y-4"
           >
-            <div className="p-4 bg-amber-500/5 border border-amber-500/15 rounded-2xl text-xs text-[#6E4B55] leading-relaxed text-left flex gap-3.5 items-start">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl text-xs text-[#6E4B55] leading-relaxed text-left flex gap-3.5 items-start">
+              <Trash2 className="h-5 w-5 text-[#FF799C] shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-amber-700 block mb-0.5">高風險作業警告 (Global Database Manager)</span>
-                此面板為全局物理資料庫。你可以強行物理刪除任何已發布、甚至 pending 的同人畫作、照片、音軌、或一般用戶帳號。物理刪除將不可恢復，請確認操作安全。
+                <span className="font-bold text-[#FF799C] block mb-0.5">已核准稿件回收控制台 (Approved Submissions Manager)</span>
+                此面板僅供管理員「刪除已通過審核並發布」的同人作品、照片、音軌、或信件。在下方輸入關鍵字搜尋，點擊「丟入回收桶」即可完成刪除。此刪除將不可恢復，使用者的個人資料與星寵均不受影響。
               </div>
             </div>
 
+            {/* Search Input Area */}
+            <div className="relative">
+              <input
+                type="text"
+                value={approvedSearchQuery}
+                onChange={(e) => setApprovedSearchQuery(e.target.value)}
+                placeholder="🔍 輸入稿件標題、關鍵字或投稿者帳號進行搜尋..."
+                className="w-full bg-white border border-[#FF799C]/25 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-xs px-4 py-3 rounded-2xl transition-all focus:ring-1 focus:ring-[#FF799C]/30 shadow-inner"
+              />
+              {approvedSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setApprovedSearchQuery("")}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#FF799C] text-xs font-bold"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+
             {globalData ? (
-              <div className="space-y-6 pt-2">
-                {/* Users Management */}
-                <div className="space-y-3">
-                  <span className="text-xs font-mono font-bold tracking-widest text-[#FF799C] uppercase block text-left">
-                    STARRY USERS ({displayedUsers.length})
-                  </span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {displayedUsers.map((u) => (
-                      <div
-                        key={u.id}
-                        className="flex justify-between items-center p-3.5 rounded-xl bg-white border border-[#FF799C]/10 text-xs shadow-sm hover:border-[#FF799C]/20 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <img src={u.avatar} alt="" className="h-8 w-8 rounded-full border border-[#FF799C]/15 shrink-0" />
-                          <div className="text-left">
-                            <p className="font-bold text-[#6E4B55] font-serif">{u.username}</p>
-                            <p className="text-[10px] text-[#6E4B55]/60 font-mono">{u.email} • {u.role}</p>
-                          </div>
-                        </div>
+              <div className="space-y-4">
+                {(() => {
+                  const approvedList = getApprovedPostsList();
+                  const filtered = approvedList.filter((item: any) => {
+                    if (!approvedSearchQuery) return true;
+                    const query = approvedSearchQuery.trim().toLowerCase();
+                    const title = (item.title || "").toLowerCase();
+                    const content = (item.content || "").toLowerCase();
+                    const messageStr = (item.message || "").toLowerCase();
+                    const username = (item.username || "").toLowerCase();
+                    const authorName = (item.author_name || "").toLowerCase();
+                    return (
+                      title.includes(query) ||
+                      content.includes(query) ||
+                      messageStr.includes(query) ||
+                      username.includes(query) ||
+                      authorName.includes(query)
+                    );
+                  });
 
-                        {/* Disable delete for active admin */}
-                        {u.email?.trim().toLowerCase() !== "celia970105@gmail.com" && u.role !== "admin" && u.id !== "admin" && (
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`確定要完全物理刪除用戶「${u.username}」嗎？此操作將永久註銷其帳號與星寵數據且不可恢復！`)) {
-                                handleAction("users", u.id, "delete");
-                              }
-                            }}
-                            className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-100 transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-                            title="註銷帳戶"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span className="text-[10px] font-bold">刪除</span>
-                          </button>
-                        )}
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-16 bg-[#FFF6F2]/30 border border-dashed border-[#FF799C]/20 rounded-3xl">
+                        <p className="text-[#6E4B55] font-serif font-bold text-sm">無符合搜尋結果的稿件</p>
+                        <p className="text-[#6E4B55]/60 text-xs mt-1">請嘗試更換其他關鍵字，或確認稿件狀態是否已通過審核。</p>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    );
+                  }
 
-                {/* Star Pets Management */}
-                <div className="space-y-3 pt-4 border-t border-[#FF799C]/10">
-                  <span className="text-xs font-mono font-bold tracking-widest text-[#FF799C] uppercase block text-left">
-                    STAR PETS ({globalData.pets.length})
-                  </span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {globalData.pets.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex justify-between items-center p-3.5 rounded-xl bg-white border border-[#FF799C]/10 text-xs shadow-sm hover:border-[#FF799C]/20 transition-all"
-                      >
-                        <div className="text-left">
-                          <p className="font-bold text-[#6E4B55] font-serif">{p.name}</p>
-                          <p className="text-[10px] text-[#6E4B55]/60 font-mono">
-                            主子: @{p.owner_name} • LV.{p.level} • {p.type}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleAction("pets", p.id, "delete")}
-                          className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-100 transition-all active:scale-95 cursor-pointer"
-                          title="強行物理清除星寵"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                  const typeLabelMap: Record<string, string> = {
+                    photos: "📸 相片",
+                    videos: "🎬 影片",
+                    letters: "💌 信件",
+                    artworks: "🎨 畫作",
+                    music: "🎵 音樂",
+                    candies: "🍬 糖果"
+                  };
+
+                  return (
+                    <div className="space-y-3 pt-2">
+                      <span className="text-[11px] font-mono font-bold tracking-widest text-[#FF799C] uppercase block text-left">
+                        搜尋結果 (顯示 {filtered.length} 個已通過投稿)
+                      </span>
+                      <div className="grid grid-cols-1 gap-3.5">
+                        {filtered.map((item: any) => {
+                          const authorUser = item.user_id && item.user_id !== "anonymous"
+                            ? displayedUsers.find((u: any) => u.id === item.user_id)
+                            : null;
+
+                          return (
+                            <div
+                              key={`${item._categoryKey}-${item.id}`}
+                              className="flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 bg-white border border-[#FF799C]/15 hover:border-[#FF799C]/30 hover:shadow-sm rounded-[24px] transition-all gap-4 text-xs text-left"
+                            >
+                              <div className="flex items-center gap-4 min-w-0">
+                                {/* Thumbnail */}
+                                {(item.image_url || item.cover_url) && (
+                                  <div className="h-12 w-12 rounded-xl overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
+                                    <img
+                                      src={item.image_url || item.cover_url}
+                                      alt=""
+                                      className="h-full w-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* Letter specific block */}
+                                {item.content && !item.image_url && (
+                                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center border font-serif font-bold text-lg shrink-0 bg-[#FF799C]/10 border-[#FF799C]/20 text-[#FF799C]`}>
+                                    {item._categoryKey === "candies" ? "糖" : "信"}
+                                  </div>
+                                )}
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <span className="text-[9px] font-mono font-bold bg-[#FF799C]/10 text-[#FF799C] px-1.5 py-0.5 rounded uppercase">
+                                      {typeLabelMap[item._categoryKey] || "應援項目"}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100 px-1.5 py-0.2 rounded font-mono">
+                                      {item.category || item.color_theme || "一般"}
+                                    </span>
+                                  </div>
+
+                                  <h4 className="text-[#6E4B55] font-serif font-bold text-sm truncate leading-snug max-w-[280px] md:max-w-[450px]">
+                                    {item.title || item.content?.substring(0, 30) + "..."}
+                                  </h4>
+
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[#6E4B55]/50 text-[11px] font-mono mt-1">
+                                    <span>
+                                      由 @{item.username || item.author_name || "匿名同盟"} 
+                                      {authorUser ? ` (${authorUser.email})` : ""} 投遞
+                                    </span>
+                                    <span>•</span>
+                                    <span>時間: {new Date(item.created_at).toLocaleString("zh-TW")}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    setSelectedItemType(item._categoryKey);
+                                  }}
+                                  className="bg-pink-50 hover:bg-pink-100 border border-pink-100 text-[#FF799C] p-2.5 rounded-xl transition-all flex items-center justify-center cursor-pointer"
+                                  title="放大檢視 / 詳細審查"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`確定要將此已核准稿件「${item.title || "無標題項目"}」丟入回收桶（徹底刪除）嗎？此操作不可逆！`)) {
+                                      handleAction(item._categoryKey, item.id, "delete");
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-100 font-bold transition-all active:scale-95 cursor-pointer"
+                                  title="丟入回收桶"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span>丟入回收桶</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="text-center py-12">

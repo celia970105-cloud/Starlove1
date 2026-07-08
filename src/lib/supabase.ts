@@ -104,42 +104,180 @@ const DB_KEYS = [
 // Helper to read database key
 export async function getDbKey(key: string): Promise<any> {
   const defaultValue = (SEED_DATA as any)[key] || [];
+
+  // 1. Recover/reconstruct local list of users from persistent backups if key is "users"
+  let localUsers: any[] = [];
+  if (key === "users") {
+    try {
+      const localStr = localStorage.getItem("starry_local_users");
+      localUsers = localStr ? JSON.parse(localStr) : [];
+    } catch (e) {}
+
+    const backupMapStr = localStorage.getItem("starry_backup_users_map") || "{}";
+    try {
+      const backupMap = JSON.parse(backupMapStr);
+      for (const emailKey in backupMap) {
+        const backupU = backupMap[emailKey];
+        if (!localUsers.some((u: any) => u.email?.trim().toLowerCase() === backupU.email?.trim().toLowerCase())) {
+          localUsers.push({
+            id: backupU.id || `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            username: backupU.username,
+            email: backupU.email,
+            password: backupU.password || "password123",
+            avatar: backupU.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${backupU.username}`,
+            background: backupU.background || "",
+            star_coins: backupU.star_coins || 100,
+            role: backupU.role || "user",
+            bio: "Restored from persistent client backup",
+            is_guest: false,
+            solo_pet: backupU.solo_pet || null
+          });
+        }
+      }
+    } catch (e) {}
+
+    // Ensure anonymous user
+    if (!localUsers.some((u: any) => u.id === "anonymous")) {
+      localUsers.push({
+        id: "anonymous",
+        username: "Anonymous",
+        email: "anonymous@starry.com",
+        password: "anonymouspassword",
+        avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Anonymous",
+        background: "",
+        star_coins: 0,
+        role: "user",
+        bio: "Anonymous user profile",
+        is_guest: true,
+        solo_pet: null
+      });
+    }
+  }
+
+  // 2. Recover local posts if key is posts_candies (sugar points are in user backups)
+  let backupCandies: any[] = [];
+  if (key === "posts_candies") {
+    const backupMapStr = localStorage.getItem("starry_backup_users_map") || "{}";
+    try {
+      const backupMap = JSON.parse(backupMapStr);
+      for (const emailKey in backupMap) {
+        const backupU = backupMap[emailKey];
+        if (backupU.candies && Array.isArray(backupU.candies)) {
+          for (const c of backupU.candies) {
+            if (!backupCandies.some(p => p.id === c.id)) {
+              backupCandies.push(c);
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   if (!supabase) {
+    if (key === "users") {
+      localStorage.setItem("starry_local_users", JSON.stringify(localUsers));
+      return localUsers;
+    }
+    if (key === "posts_candies" && backupCandies.length > 0) {
+      let localCandies: any[] = [];
+      try {
+        const localStr = localStorage.getItem("starry_local_posts_candies");
+        localCandies = localStr ? JSON.parse(localStr) : [];
+      } catch (e) {}
+      for (const c of backupCandies) {
+        if (!localCandies.some(p => p.id === c.id)) {
+          localCandies.push(c);
+        }
+      }
+      localStorage.setItem("starry_local_posts_candies", JSON.stringify(localCandies));
+      return localCandies;
+    }
     const local = localStorage.getItem(`starry_local_${key}`);
     return local ? JSON.parse(local) : defaultValue;
   }
+
   try {
     let result: any = null;
     if (key === "users") {
       const { data, error } = await supabase.from("profiles").select("*");
       if (error) throw error;
-      result = data;
-      if (result && !result.some((u: any) => u.id === "anonymous")) {
-        const anonUser = {
-          id: "anonymous",
-          username: "Anonymous",
-          email: "anonymous@starry.com",
-          password: "anonymouspassword",
-          avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Anonymous",
-          background: "",
-          star_coins: 0,
-          role: "user",
-          bio: "Anonymous user profile",
-          is_guest: true,
-          solo_pet: null
-        };
-        try {
-          await supabase.from("profiles").insert(anonUser);
-        } catch (e) {
-          console.warn("Failed to insert anonymous user on getDbKey:", e);
+      result = data || [];
+
+      // Merge remote profiles with local/backup users to avoid losing registered users
+      for (const localU of localUsers) {
+        if (!result.some((u: any) => u.email?.trim().toLowerCase() === localU.email?.trim().toLowerCase() || u.id === localU.id)) {
+          result.push(localU);
+          // Try to upload the recovered user to Supabase profiles table
+          try {
+            await supabase.from("profiles").upsert({
+              id: localU.id,
+              username: localU.username,
+              email: localU.email,
+              password: localU.password || "password123",
+              avatar: localU.avatar || "",
+              background: localU.background || "",
+              star_coins: localU.star_coins || 100,
+              role: localU.role || "user",
+              bio: localU.bio || "",
+              is_guest: Boolean(localU.is_guest),
+              solo_pet: localU.solo_pet || null
+            });
+          } catch (e) {
+            console.warn("Auto-syncing recovered user to Supabase failed:", e);
+          }
         }
-        result.push(anonUser);
       }
     } else if (key.startsWith("posts_")) {
       const type = key.replace("posts_", "");
+      let localPosts: any[] = [];
+      try {
+        const localStr = localStorage.getItem(`starry_local_${key}`);
+        localPosts = localStr ? JSON.parse(localStr) : [];
+      } catch (e) {}
+
+      // If posts_candies, merge with backup candies too
+      if (key === "posts_candies" && backupCandies.length > 0) {
+        for (const c of backupCandies) {
+          if (!localPosts.some(p => p.id === c.id)) {
+            localPosts.push(c);
+          }
+        }
+      }
+
       const { data, error } = await supabase.from("posts").select("*").eq("type", type);
       if (error) throw error;
-      result = data;
+      result = data || [];
+
+      // Merge local posts with remote posts to prevent any local submissions from being wiped out
+      for (const localP of localPosts) {
+        if (!result.some((p: any) => p.id === localP.id)) {
+          result.push(localP);
+          // Try to sync/upload this post to Supabase
+          try {
+            await supabase.from("posts").upsert({
+              id: localP.id,
+              user_id: localP.user_id || "anonymous",
+              username: localP.username || "Anonymous",
+              type: type,
+              title: localP.title || null,
+              image_url: localP.image_url || null,
+              video_url: localP.video_url || null,
+              audio_url: localP.audio_url || null,
+              content: localP.content || null,
+              category: localP.category || null,
+              year: localP.year || null,
+              artist: localP.artist || null,
+              duration: localP.duration || null,
+              color_theme: localP.color_theme || null,
+              is_anonymous: Boolean(localP.is_anonymous),
+              status: localP.status || "pending",
+              created_at: localP.created_at || new Date().toISOString()
+            });
+          } catch (e) {
+            console.warn("Auto-syncing recovered post to Supabase failed:", e);
+          }
+        }
+      }
     } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
       const { data, error } = await supabase.from(key).select("*");
       if (error) throw error;
@@ -162,6 +300,24 @@ export async function getDbKey(key: string): Promise<any> {
     return result;
   } catch (err) {
     console.warn(`Supabase read failed for key ${key}, falling back to local storage`, err);
+    if (key === "users") {
+      localStorage.setItem("starry_local_users", JSON.stringify(localUsers));
+      return localUsers;
+    }
+    if (key === "posts_candies" && backupCandies.length > 0) {
+      let localCandies: any[] = [];
+      try {
+        const localStr = localStorage.getItem("starry_local_posts_candies");
+        localCandies = localStr ? JSON.parse(localStr) : [];
+      } catch (e) {}
+      for (const c of backupCandies) {
+        if (!localCandies.some(p => p.id === c.id)) {
+          localCandies.push(c);
+        }
+      }
+      localStorage.setItem("starry_local_posts_candies", JSON.stringify(localCandies));
+      return localCandies;
+    }
     const local = localStorage.getItem(`starry_local_${key}`);
     return local ? JSON.parse(local) : defaultValue;
   }

@@ -202,7 +202,7 @@ export async function getDbKey(key: string): Promise<any> {
       console.log(`[Supabase Read] Querying public.profiles...`);
       const { data, error } = await supabase.from("profiles").select("*");
       if (error) {
-        console.error(`[Supabase Read Error] Failed to fetch profiles:`, error);
+        console.warn(`[Supabase Read Error] Failed to fetch profiles: msg=[${error.message}] code=[${error.code}] details=[${error.details || ""}] hint=[${error.hint || ""}]`, error);
         throw error;
       }
       result = data || [];
@@ -253,7 +253,7 @@ export async function getDbKey(key: string): Promise<any> {
       console.log(`[Supabase Read] Querying public.posts for type [${type}]...`);
       const { data, error } = await supabase.from("posts").select("*").eq("type", type);
       if (error) {
-        console.error(`[Supabase Read Error] Failed to fetch posts for type [${type}]:`, error);
+        console.warn(`[Supabase Read Error] Failed to fetch posts for type [${type}]: msg=[${error.message}] code=[${error.code}] details=[${error.details || ""}] hint=[${error.hint || ""}]`, error);
         throw error;
       }
       result = data || [];
@@ -297,7 +297,7 @@ export async function getDbKey(key: string): Promise<any> {
       console.log(`[Supabase Read] Querying public.${key}...`);
       const { data, error } = await supabase.from(key).select("*");
       if (error) {
-        console.error(`[Supabase Read Error] Failed to fetch [${key}]:`, error);
+        console.warn(`[Supabase Read Error] Failed to fetch [${key}]: msg=[${error.message}] code=[${error.code}] details=[${error.details || ""}] hint=[${error.hint || ""}]`, error);
         throw error;
       }
       result = data;
@@ -313,7 +313,7 @@ export async function getDbKey(key: string): Promise<any> {
         result = data.value;
         console.log(`[Supabase Read Success] Fetched state value for [${key}].`);
       } else if (error) {
-        console.error(`[Supabase Read Error] Failed to fetch starry_state for key [${key}]:`, error);
+        console.warn(`[Supabase Read Error] Failed to fetch starry_state for key [${key}]: msg=[${error.message}] code=[${error.code}] details=[${error.details || ""}] hint=[${error.hint || ""}]`, error);
       }
     }
 
@@ -326,7 +326,7 @@ export async function getDbKey(key: string): Promise<any> {
     localStorage.setItem(`starry_local_${key}`, JSON.stringify(result));
     return result;
   } catch (err) {
-    console.error(`[Supabase Read Fatal Failure] Reading key [${key}] from Supabase failed, falling back to local storage:`, err);
+    console.warn(`[Supabase Read Fatal Failure] Reading key [${key}] from Supabase failed, falling back to local storage:`, err);
     if (key === "users") {
       localStorage.setItem("starry_local_users", JSON.stringify(localUsers));
       return localUsers;
@@ -390,7 +390,7 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       console.log(`[Supabase Auth Sync] Upserting users/profiles:`, cleanUsers);
       const { data, error } = await supabase.from("profiles").upsert(cleanUsers).select();
       if (error) {
-        console.error(`[Supabase Auth Sync Error] Failed to upsert users to profiles:`, error);
+        console.warn(`[Supabase Auth Sync Error] Failed to upsert users to profiles:`, error);
         throw error;
       }
       console.log(`[Supabase Auth Sync Success] Users successfully upserted to profiles:`, data);
@@ -421,7 +421,7 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       console.log(`[Supabase Posts Sync] Upserting posts for type [${type}]:`, cleanPosts);
       const { data, error } = await supabase.from("posts").upsert(cleanPosts).select();
       if (error) {
-        console.error(`[Supabase Posts Sync Error] Failed to upsert posts for type [${type}]:`, error);
+        console.warn(`[Supabase Posts Sync Error] Failed to upsert posts for type [${type}]:`, error);
         throw error;
       }
       console.log(`[Supabase Posts Sync Success] Posts for type [${type}] successfully upserted:`, data);
@@ -429,7 +429,7 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       console.log(`[Supabase Collection Sync] Upserting key [${key}]:`, value);
       const { data, error } = await supabase.from(key).upsert(value).select();
       if (error) {
-        console.error(`[Supabase Collection Sync Error] Failed to upsert [${key}]:`, error);
+        console.warn(`[Supabase Collection Sync Error] Failed to upsert [${key}]:`, error);
         throw error;
       }
       console.log(`[Supabase Collection Sync Success] Successfully synced [${key}]:`, data);
@@ -445,14 +445,14 @@ export async function setDbKey(key: string, value: any): Promise<void> {
           .update({ value })
           .eq("key", key);
         if (updateError) {
-          console.error(`[Supabase State Sync Error] Failed to update key [${key}]:`, updateError);
+          console.warn(`[Supabase State Sync Error] Failed to update key [${key}]:`, updateError);
           throw updateError;
         }
       }
       console.log(`[Supabase State Sync Success] Successfully synced state for [${key}]`);
     }
   } catch (err) {
-    console.error(`[Supabase Sync Fatal Failure] Supabase write failed for key [${key}] but stored in localStorage as fallback:`, err);
+    console.warn(`[Supabase Sync Fatal Failure] Supabase write failed for key [${key}] but stored in localStorage as fallback:`, err);
   }
 }
 
@@ -569,15 +569,15 @@ export async function recordLeaderboardPost(userId: string, username: string, av
 
 // Initialize / Sync DB
 export async function initializeDatabase() {
-  if (!supabase) {
-    // If local storage is empty, initialize with seed data
-    for (const key of DB_KEYS) {
-      if (!localStorage.getItem(`starry_local_${key}`)) {
-        localStorage.setItem(`starry_local_${key}`, JSON.stringify((SEED_DATA as any)[key] || []));
-      }
+  // Always ensure local storage is initialized with default seed data if empty,
+  // so we have fallback backups and default system accounts (CeliaAdmin, Anonymous) ready
+  for (const key of DB_KEYS) {
+    if (!localStorage.getItem(`starry_local_${key}`)) {
+      localStorage.setItem(`starry_local_${key}`, JSON.stringify((SEED_DATA as any)[key] || []));
     }
-    return;
   }
+
+  if (!supabase) return;
 
   try {
     // Run hourly passive reward catch-up
@@ -601,7 +601,7 @@ export async function initializeDatabase() {
       }
     }
   } catch (err) {
-    console.error("Database initialization / catch-up failed:", err);
+    console.warn("Database initialization / catch-up failed:", err);
   }
 }
 
@@ -2047,6 +2047,21 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         collection[idx].status = "rejected";
       } else if (action === "delete") {
         collection.splice(idx, 1);
+        if (supabase) {
+          try {
+            if (key === "users" || key === "user") {
+              await supabase.from("profiles").delete().eq("id", id);
+            } else if (key === "pets" || key === "pet") {
+              await supabase.from("pets").delete().eq("id", id);
+            } else if (key.startsWith("posts_")) {
+              await supabase.from("posts").delete().eq("id", id);
+            } else if (["friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
+              await supabase.from(key).delete().eq("id", id);
+            }
+          } catch (e) {
+            console.warn("Supabase delete in action failed:", e);
+          }
+        }
       } else {
         return jsonResponse({ error: "Invalid action" }, 400);
       }

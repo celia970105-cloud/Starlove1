@@ -143,6 +143,13 @@ create table if not exists public.friend_snaps (
   timestamp timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- 13. Starry State Table (Generic key-value store)
+create table if not exists public.starry_state (
+  key text primary key,
+  value jsonb,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- ========================================================
 -- 🔒 Row Level Security (RLS) & Security Policies
 -- ========================================================
@@ -160,6 +167,7 @@ alter table public.friendships enable row level security;
 alter table public.coparent_groups enable row level security;
 alter table public.interactions enable row level security;
 alter table public.friend_snaps enable row level security;
+alter table public.starry_state enable row level security;
 
 -- 👤 Profiles Policies
 drop policy if exists "Allow public read access to profiles" on public.profiles;
@@ -357,6 +365,25 @@ create policy "Allow insert friend snaps" on public.friend_snaps
 
 create policy "Allow delete friend snaps" on public.friend_snaps
   for delete using (auth.uid()::text = sender_id);
+
+
+-- 🔮 Starry State Policies
+drop policy if exists "Allow public read access to starry_state" on public.starry_state;
+drop policy if exists "Allow public insert to starry_state" on public.starry_state;
+drop policy if exists "Allow public update to starry_state" on public.starry_state;
+drop policy if exists "Allow public delete to starry_state" on public.starry_state;
+
+create policy "Allow public read access to starry_state" on public.starry_state
+  for select using (true);
+
+create policy "Allow public insert to starry_state" on public.starry_state
+  for insert with check (true);
+
+create policy "Allow public update to starry_state" on public.starry_state
+  for update using (true) with check (true);
+
+create policy "Allow public delete to starry_state" on public.starry_state
+  for delete using (true);
 
 
 -- ========================================================

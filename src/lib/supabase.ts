@@ -282,8 +282,8 @@ export async function getDbKey(key: string): Promise<any> {
       // Merge local posts with remote posts to prevent any local submissions from being wiped out
       let localPostsUpdated = false;
       for (const localP of localPosts) {
-        // Only resurrect/sync if they are not yet marked as synced: true
-        if (localP.synced !== true) {
+        // Only resurrect/sync if they are not yet marked as synced: true OR if they are pending but completely missing from DB (likely due to a previous network/schema sync error)
+        if (localP.synced !== true || (localP.status === "pending" && !result.some((p: any) => p.id === localP.id))) {
           if (!result.some((p: any) => p.id === localP.id)) {
             result.push(localP);
             // Try to sync/upload this post to Supabase
@@ -384,12 +384,8 @@ export async function getDbKey(key: string): Promise<any> {
 
 // Helper to write database key
 export async function setDbKey(key: string, value: any): Promise<void> {
-  // Mark items as synced: true inside localStorage to prevent resurrection of deleted items
-  let localStorageValue = value;
-  if (Array.isArray(value)) {
-    localStorageValue = value.map(item => typeof item === 'object' && item !== null ? { ...item, synced: true } : item);
-  }
-  localStorage.setItem(`starry_local_${key}`, JSON.stringify(localStorageValue));
+  // Save as-is first to local storage
+  localStorage.setItem(`starry_local_${key}`, JSON.stringify(value));
   if (!supabase) {
     console.log(`[Database Native] Supabase is not connected. LocalStorage update success for [${key}]`);
     return;
@@ -488,6 +484,13 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       }
       console.log(`[Supabase State Sync Success] Successfully synced state for [${key}]`);
     }
+
+    // Since the database write succeeded, mark as synced: true in local storage!
+    let localStorageValue = value;
+    if (Array.isArray(value)) {
+      localStorageValue = value.map(item => typeof item === 'object' && item !== null ? { ...item, synced: true } : item);
+    }
+    localStorage.setItem(`starry_local_${key}`, JSON.stringify(localStorageValue));
   } catch (err) {
     console.warn(`[Supabase Sync Fatal Failure] Supabase write failed for key [${key}] but stored in localStorage as fallback:`, err);
   }

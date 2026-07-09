@@ -1181,7 +1181,7 @@ export default function App() {
                     黑膠音軌唱片機
                   </h3>
                 </div>
-                <MusicPlayer currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+                <MusicPlayer currentUser={currentUser} onRefreshData={refreshCurrentUser} globalRefreshCount={globalRefreshCount} />
               </div>
             </motion.div>
           )}

@@ -18,6 +18,7 @@ if (typeof window !== "undefined") {
 interface MusicPlayerProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
 const THEMES = {
@@ -122,7 +123,7 @@ const parseEmbedUrl = (url: string) => {
   return url;
 };
 
-export default function MusicPlayer({ currentUser, onRefreshData }: MusicPlayerProps) {
+export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshCount }: MusicPlayerProps) {
   const [tracks, setTracks] = useState<MusicPost[]>(globalTracks);
   const [currentIdx, setCurrentIdx] = useState(globalCurrentIdx);
   const [isPlaying, setIsPlaying] = useState(sharedAudio ? !sharedAudio.paused && !!sharedAudio.src : false);
@@ -240,7 +241,7 @@ export default function MusicPlayer({ currentUser, onRefreshData }: MusicPlayerP
 
   useEffect(() => {
     fetchTracks();
-  }, []);
+  }, [globalRefreshCount]);
 
   // Update global index reference when currentIdx changes
   useEffect(() => {

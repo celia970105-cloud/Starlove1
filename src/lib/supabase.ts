@@ -268,8 +268,16 @@ export async function getDbKey(key: string): Promise<any> {
         console.warn(`[Supabase Read Error] Failed to fetch posts for type [${type}]: msg=[${error.message}] code=[${error.code}] details=[${error.details || ""}] hint=[${error.hint || ""}]`, error);
         throw error;
       }
-      result = data || [];
-      console.log(`[Supabase Read Success] Fetched ${result.length} posts for type [${type}].`);
+      let fetchedPosts = data || [];
+      console.log(`[Supabase Read Success] Fetched ${fetchedPosts.length} posts for type [${type}].`);
+
+      if (type === "music") {
+        fetchedPosts = fetchedPosts.map((p: any) => ({
+          ...p,
+          cover_url: p.cover_url || p.image_url || null
+        }));
+      }
+      result = fetchedPosts;
 
       // Merge local posts with remote posts to prevent any local submissions from being wiped out
       let localPostsUpdated = false;
@@ -288,8 +296,8 @@ export async function getDbKey(key: string): Promise<any> {
                 avatar: localP.avatar || null,
                 type: type,
                 title: localP.title || null,
-                image_url: localP.image_url || null,
-                images: localP.image_url || null,
+                image_url: localP.image_url || localP.cover_url || null,
+                images: localP.image_url || localP.cover_url || null,
                 video_url: localP.video_url || null,
                 videos: localP.video_url || null,
                 audio_url: localP.audio_url || null,
@@ -432,8 +440,8 @@ export async function setDbKey(key: string, value: any): Promise<void> {
         avatar: p.avatar || null,
         type: type,
         title: p.title || null,
-        image_url: p.image_url || null,
-        images: p.image_url || null,
+        image_url: p.image_url || p.cover_url || null,
+        images: p.image_url || p.cover_url || null,
         video_url: p.video_url || null,
         videos: p.video_url || null,
         audio_url: p.audio_url || null,

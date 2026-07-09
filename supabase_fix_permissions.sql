@@ -1,10 +1,10 @@
 -- ========================================================
--- 🌟 Starry Wish - Supabase Permissions & RLS Policies Fix
+-- 🌟 Starry Wish - Supabase Permissions, Schema, and RLS Fix SQL
 -- ========================================================
 --
 -- 說明：
--- 由於本機環境與預覽容器僅持有 anon 公開金鑰，無法直接執行具有 DDL (如 GRANT 或 CREATE POLICY) 
--- 權限之管理指令。您需要直接複製以下 SQL 指令，貼入您的 Supabase 專案 SQL 編輯器中執行。
+-- 1. 由於本機與預覽環境只有 anon 公開金鑰，無法直接對雲端資料庫執行 DDL (例如 ALTER TABLE, CREATE POLICY 等) 權限指令。
+-- 2. 您需要【複製以下所有 SQL 指令】，直接貼入您的 Supabase 專案 SQL 編輯器中執行。
 --
 -- 執行網址：
 -- https://supabase.com/dashboard/project/monzjuezyncvdlzqgqmo/sql
@@ -12,7 +12,24 @@
 -- ========================================================
 
 -- --------------------------------------------------------
--- 1. 基礎模式與資料表權限授權 (解決 42501 Permission Denied 錯誤)
+-- 1. 補齊 posts 資料表缺少的欄位 (重要！修復 Column Not Found 錯誤)
+-- --------------------------------------------------------
+-- 經檢查，目前資料庫的 posts 資料表缺少了部分前端音樂/影片/同人投稿所需的欄位，
+-- 執行以下指令可以安全地補齊所有缺失欄位而不影響現有資料：
+
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS images text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS video_url text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS videos text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS audio_url text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS category text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS year text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS artist text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS duration text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS color_theme text;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS is_anonymous boolean DEFAULT false;
+
+-- --------------------------------------------------------
+-- 2. 基礎模式與資料表權限授權 (解決 42501 Permission Denied 錯誤)
 -- --------------------------------------------------------
 -- 授權公用角色使用 public schema
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
@@ -29,7 +46,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authen
 
 
 -- --------------------------------------------------------
--- 2. 設定 posts 資料表的 RLS 與 Policy 
+-- 3. 設定 posts 資料表的 RLS 與 Policy 
 -- --------------------------------------------------------
 -- 確保 posts 啟用 Row Level Security
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
@@ -44,14 +61,14 @@ DROP POLICY IF EXISTS "Allow users or admin to update posts" ON public.posts;
 DROP POLICY IF EXISTS "Allow users or admin to delete posts" ON public.posts;
 DROP POLICY IF EXISTS "Allow users to insert posts" ON public.posts;
 
--- 建立使用者指定的投稿寫入 Policy
+-- 建立投稿寫入 Policy
 CREATE POLICY "Anyone can insert posts"
 ON public.posts
 FOR INSERT
 TO anon, authenticated
 WITH CHECK (true);
 
--- 建立使用者指定的投稿讀取 Policy
+-- 建立投稿讀取 Policy
 CREATE POLICY "Anyone can read posts"
 ON public.posts
 FOR SELECT
@@ -66,9 +83,16 @@ TO anon, authenticated
 USING (true)
 WITH CHECK (true);
 
+-- 建立刪除 Policy (以利管理員進行刪除項目操作)
+CREATE POLICY "Anyone can delete posts"
+ON public.posts
+FOR DELETE
+TO anon, authenticated
+USING (true);
+
 
 -- --------------------------------------------------------
--- 3. 同步設定 profiles ＆ starry_state 資料表
+-- 4. 同步設定 profiles ＆ starry_state 資料表
 -- --------------------------------------------------------
 -- profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -95,3 +119,6 @@ CREATE POLICY "Anyone can insert starry_state" ON public.starry_state FOR INSERT
 
 DROP POLICY IF EXISTS "Anyone can update starry_state" ON public.starry_state;
 CREATE POLICY "Anyone can update starry_state" ON public.starry_state FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 通知 Supabase 重新載入快取以利立即使所有欄位生效
+NOTIFY pgrst, 'reload schema';

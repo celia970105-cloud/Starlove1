@@ -7,9 +7,10 @@ import SocialInteractiveBlock from "./SocialInteractiveBlock";
 interface LettersModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
-export default function LettersModule({ currentUser, onRefreshData }: LettersModuleProps) {
+export default function LettersModule({ currentUser, onRefreshData, globalRefreshCount }: LettersModuleProps) {
   const [letters, setLetters] = useState<LetterPost[]>([]);
   const [selectedLetter, setSelectedLetter] = useState<LetterPost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +83,7 @@ export default function LettersModule({ currentUser, onRefreshData }: LettersMod
 
   useEffect(() => {
     fetchLetters();
-  }, []);
+  }, [globalRefreshCount]);
 
   // Set default author name when user state changes
   useEffect(() => {

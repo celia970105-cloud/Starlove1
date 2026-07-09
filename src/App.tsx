@@ -64,6 +64,8 @@ export default function App() {
 
   // State to store and synchronize all registered users
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  // Global counter to trigger re-fetches when any submission is approved/deleted/moderated
+  const [globalRefreshCount, setGlobalRefreshCount] = useState(0);
 
   // Floating pet greeting speech state
   const [companionGreeting, setCompanionGreeting] = useState("所以謝謝你的存在");
@@ -335,6 +337,11 @@ export default function App() {
     } catch (e) {
       console.error("Failed to refresh current user:", e);
     }
+  };
+
+  const triggerGlobalRefresh = () => {
+    setGlobalRefreshCount((prev) => prev + 1);
+    refreshCurrentUser();
   };
 
   // Active User Tracking & Heartbeat Loop
@@ -1266,7 +1273,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <GalleryModule currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+              <GalleryModule currentUser={currentUser} onRefreshData={triggerGlobalRefresh} globalRefreshCount={globalRefreshCount} />
             </motion.div>
           )}
 
@@ -1277,7 +1284,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <VideoModule currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+              <VideoModule currentUser={currentUser} onRefreshData={triggerGlobalRefresh} globalRefreshCount={globalRefreshCount} />
             </motion.div>
           )}
 
@@ -1288,7 +1295,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <LettersModule currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+              <LettersModule currentUser={currentUser} onRefreshData={triggerGlobalRefresh} globalRefreshCount={globalRefreshCount} />
             </motion.div>
           )}
 
@@ -1299,7 +1306,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <MuseumModule currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+              <MuseumModule currentUser={currentUser} onRefreshData={triggerGlobalRefresh} globalRefreshCount={globalRefreshCount} />
             </motion.div>
           )}
 
@@ -1321,7 +1328,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <CandyJarModule currentUser={currentUser} onRefreshData={refreshCurrentUser} />
+              <CandyJarModule currentUser={currentUser} onRefreshData={triggerGlobalRefresh} globalRefreshCount={globalRefreshCount} />
             </motion.div>
           )}
 
@@ -1336,7 +1343,7 @@ export default function App() {
                 currentUser={currentUser}
                 onLoginSuccess={handleLoginSuccess}
                 onLogout={handleLogout}
-                refreshCurrentUser={refreshCurrentUser}
+                refreshCurrentUser={triggerGlobalRefresh}
                 onNavigateToAdmin={() => setActiveModule("admin")}
               />
             </motion.div>
@@ -1351,7 +1358,7 @@ export default function App() {
             >
               <AdminModule
                 currentUser={currentUser}
-                onRefreshData={refreshCurrentUser}
+                onRefreshData={triggerGlobalRefresh}
                 registeredUsers={registeredUsers}
                 onRefreshUsers={fetchAllUsers}
               />

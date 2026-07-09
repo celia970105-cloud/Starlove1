@@ -209,29 +209,41 @@ export async function getDbKey(key: string): Promise<any> {
       console.log(`[Supabase Read Success] Fetched ${result.length} profiles.`);
 
       // Merge remote profiles with local/backup users to avoid losing registered users
+      let localUsersUpdated = false;
       for (const localU of localUsers) {
-        if (!result.some((u: any) => u.email?.trim().toLowerCase() === localU.email?.trim().toLowerCase() || u.id === localU.id)) {
-          result.push(localU);
-          // Try to upload the recovered user to Supabase profiles table
-          try {
-            console.log(`[Supabase Sync] Syncing recovered user [${localU.username}] to profiles...`);
-            await supabase.from("profiles").upsert({
-              id: localU.id,
-              username: localU.username,
-              email: localU.email,
-              password: localU.password || "password123",
-              avatar: localU.avatar || "",
-              background: localU.background || "",
-              star_coins: localU.star_coins || 100,
-              role: localU.role || "user",
-              bio: localU.bio || "",
-              is_guest: Boolean(localU.is_guest),
-              solo_pet: localU.solo_pet || null
-            });
-          } catch (e) {
-            console.warn("[Supabase Sync Warning] Auto-syncing recovered user to Supabase failed:", e);
+        // Only resurrect/sync if they are not yet marked as synced: true
+        if (localU.synced !== true) {
+          if (!result.some((u: any) => u.email?.trim().toLowerCase() === localU.email?.trim().toLowerCase() || u.id === localU.id)) {
+            result.push(localU);
+            // Try to upload the recovered user to Supabase profiles table
+            try {
+              console.log(`[Supabase Sync] Syncing recovered user [${localU.username}] to profiles...`);
+              await supabase.from("profiles").upsert({
+                id: localU.id,
+                username: localU.username,
+                email: localU.email,
+                password: localU.password || "password123",
+                avatar: localU.avatar || "",
+                background: localU.background || "",
+                star_coins: localU.star_coins || 100,
+                role: localU.role || "user",
+                bio: localU.bio || "",
+                is_guest: Boolean(localU.is_guest),
+                solo_pet: localU.solo_pet || null
+              });
+              localU.synced = true;
+              localUsersUpdated = true;
+            } catch (e) {
+              console.warn("[Supabase Sync Warning] Auto-syncing recovered user to Supabase failed:", e);
+            }
+          } else {
+            localU.synced = true;
+            localUsersUpdated = true;
           }
         }
+      }
+      if (localUsersUpdated) {
+        localStorage.setItem("starry_local_users", JSON.stringify(localUsers));
       }
     } else if (key.startsWith("posts_")) {
       const type = key.replace("posts_", "");
@@ -260,38 +272,50 @@ export async function getDbKey(key: string): Promise<any> {
       console.log(`[Supabase Read Success] Fetched ${result.length} posts for type [${type}].`);
 
       // Merge local posts with remote posts to prevent any local submissions from being wiped out
+      let localPostsUpdated = false;
       for (const localP of localPosts) {
-        if (!result.some((p: any) => p.id === localP.id)) {
-          result.push(localP);
-          // Try to sync/upload this post to Supabase
-          try {
-            console.log(`[Supabase Sync] Uploading recovered post [${localP.id}] to Supabase posts table...`);
-            await supabase.from("posts").upsert({
-              id: localP.id,
-              user_id: localP.user_id || "anonymous",
-              username: localP.username || "Anonymous",
-              avatar: localP.avatar || null,
-              type: type,
-              title: localP.title || null,
-              image_url: localP.image_url || null,
-              images: localP.image_url || null,
-              video_url: localP.video_url || null,
-              videos: localP.video_url || null,
-              audio_url: localP.audio_url || null,
-              content: localP.content || null,
-              category: localP.category || null,
-              year: localP.year || null,
-              artist: localP.artist || null,
-              duration: localP.duration || null,
-              color_theme: localP.color_theme || null,
-              is_anonymous: Boolean(localP.is_anonymous),
-              status: localP.status || "pending",
-              created_at: localP.created_at || new Date().toISOString()
-            });
-          } catch (e) {
-            console.warn("[Supabase Sync Warning] Auto-syncing recovered post to Supabase failed:", e);
+        // Only resurrect/sync if they are not yet marked as synced: true
+        if (localP.synced !== true) {
+          if (!result.some((p: any) => p.id === localP.id)) {
+            result.push(localP);
+            // Try to sync/upload this post to Supabase
+            try {
+              console.log(`[Supabase Sync] Uploading recovered post [${localP.id}] to Supabase posts table...`);
+              await supabase.from("posts").upsert({
+                id: localP.id,
+                user_id: localP.user_id || "anonymous",
+                username: localP.username || "Anonymous",
+                avatar: localP.avatar || null,
+                type: type,
+                title: localP.title || null,
+                image_url: localP.image_url || null,
+                images: localP.image_url || null,
+                video_url: localP.video_url || null,
+                videos: localP.video_url || null,
+                audio_url: localP.audio_url || null,
+                content: localP.content || null,
+                category: localP.category || null,
+                year: localP.year || null,
+                artist: localP.artist || null,
+                duration: localP.duration || null,
+                color_theme: localP.color_theme || null,
+                is_anonymous: Boolean(localP.is_anonymous),
+                status: localP.status || "pending",
+                created_at: localP.created_at || new Date().toISOString()
+              });
+              localP.synced = true;
+              localPostsUpdated = true;
+            } catch (e) {
+              console.warn("[Supabase Sync Warning] Auto-syncing recovered post to Supabase failed:", e);
+            }
+          } else {
+            localP.synced = true;
+            localPostsUpdated = true;
           }
         }
+      }
+      if (localPostsUpdated) {
+        localStorage.setItem(`starry_local_${key}`, JSON.stringify(localPosts));
       }
     } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
       console.log(`[Supabase Read] Querying public.${key}...`);
@@ -352,7 +376,12 @@ export async function getDbKey(key: string): Promise<any> {
 
 // Helper to write database key
 export async function setDbKey(key: string, value: any): Promise<void> {
-  localStorage.setItem(`starry_local_${key}`, JSON.stringify(value));
+  // Mark items as synced: true inside localStorage to prevent resurrection of deleted items
+  let localStorageValue = value;
+  if (Array.isArray(value)) {
+    localStorageValue = value.map(item => typeof item === 'object' && item !== null ? { ...item, synced: true } : item);
+  }
+  localStorage.setItem(`starry_local_${key}`, JSON.stringify(localStorageValue));
   if (!supabase) {
     console.log(`[Database Native] Supabase is not connected. LocalStorage update success for [${key}]`);
     return;

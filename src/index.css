@@ -1,15 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&family=Playfair+Display:ital,wght@0,300..600;1,300..600&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Zen+Maru+Gothic:wght@400;500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=Playfair+Display:ital,wght@0,300..600;1,300..600&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Fredoka", "M PLUS Rounded 1c", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Fredoka", "M PLUS Rounded 1c", "Playfair Display", Georgia, serif;
+  --font-sans: "Fredoka", "Zen Maru Gothic", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fredoka", "Zen Maru Gothic", "Playfair Display", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* Global Font Overrides for Cute & Bold Look */
 body, button, input, select, textarea {
-  font-family: "Fredoka", "M PLUS Rounded 1c", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif !important;
+  font-family: "Fredoka", "Zen Maru Gothic", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif !important;
   letter-spacing: 0.02em;
 }
 

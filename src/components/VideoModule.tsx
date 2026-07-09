@@ -7,9 +7,10 @@ import SocialInteractiveBlock from "./SocialInteractiveBlock";
 interface VideoModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
-export default function VideoModule({ currentUser, onRefreshData }: VideoModuleProps) {
+export default function VideoModule({ currentUser, onRefreshData, globalRefreshCount }: VideoModuleProps) {
   const [videos, setVideos] = useState<VideoPost[]>([]);
   const [activeVideo, setActiveVideo] = useState<VideoPost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +86,7 @@ export default function VideoModule({ currentUser, onRefreshData }: VideoModuleP
 
   useEffect(() => {
     fetchVideos();
-  }, []);
+  }, [globalRefreshCount]);
 
   // Update player source and play state on active video change
   useEffect(() => {

@@ -547,15 +547,19 @@ export default function AdminModule({
                     music: "🎵 音樂",
                     candies: "🍬 糖果"
                   };
-                  const authorUser = item.user_id && item.user_id !== "anonymous"
+                  const authorUser = (item.user_id && item.user_id !== "anonymous"
                     ? displayedUsers.find((u: any) => u.id === item.user_id)
-                    : null;
+                    : null) || (item.username
+                    ? displayedUsers.find((u: any) => u.username?.trim().toLowerCase() === item.username?.trim().toLowerCase())
+                    : null) || (item.author_name
+                    ? displayedUsers.find((u: any) => u.username?.trim().toLowerCase() === item.author_name?.trim().toLowerCase())
+                    : null);
                   return (
                     <div
                       key={item.id}
                       className="flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 bg-white hover:bg-[#FFF6F2]/20 border border-[#FF799C]/15 hover:border-[#FF799C]/30 hover:shadow-sm rounded-[24px] transition-all gap-4 text-xs"
                     >
-                      <div className="flex items-center gap-4 min-w-0">
+                      <div className="flex items-center gap-4 min-w-0 w-full">
                         {/* Thumbnail image if available */}
                         {(item.image_url || item.cover_url) && (
                           <div className="h-12 w-12 rounded-xl overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
@@ -574,7 +578,7 @@ export default function AdminModule({
                           </div>
                         )}
 
-                        <div className="text-left min-w-0">
+                        <div className="text-left min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="text-[9px] font-mono font-bold bg-[#FF799C]/10 text-[#FF799C] px-1.5 py-0.5 rounded uppercase">
                               {typeLabelMap[item._categoryKey] || "應援項目"}
@@ -585,13 +589,24 @@ export default function AdminModule({
                           </div>
 
                           <h4 className="text-[#6E4B55] font-serif font-bold text-sm truncate leading-snug max-w-[280px] md:max-w-[450px]">
-                            {item.title || item.content?.substring(0, 30) + "..."}
+                            {item.title || "無標題投稿"}
                           </h4>
 
+                          {item.content && (
+                            <p className="text-xs text-[#6E4B55]/70 mt-1 line-clamp-2 bg-[#FFF6F2]/30 p-2 rounded-xl border border-[#FF799C]/5">
+                              {item.content}
+                            </p>
+                          )}
+
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[#6E4B55]/50 text-[11px] font-mono mt-1">
+                            <img 
+                              src={authorUser?.avatar || item.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${item.username || "Anonymous"}`} 
+                              alt="" 
+                              className="h-4 w-4 rounded-full border border-[#FF799C]/20"
+                            />
                             <span>
-                              由 @{item.username || item.author_name || "匿名同盟"} 
-                              {authorUser ? ` (${authorUser.email})` : ""} 投遞
+                              @{item.username || item.author_name || "匿名同盟"} 
+                              {authorUser ? ` (${authorUser.email})` : ""}
                             </span>
                             <span>•</span>
                             <span>時間: {new Date(item.created_at).toLocaleString("zh-TW")}</span>

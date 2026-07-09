@@ -8,9 +8,10 @@ import { compressImage } from "../lib/imageCompressor";
 interface MuseumModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
-export default function MuseumModule({ currentUser, onRefreshData }: MuseumModuleProps) {
+export default function MuseumModule({ currentUser, onRefreshData, globalRefreshCount }: MuseumModuleProps) {
   const [artworks, setArtworks] = useState<ArtworkPost[]>([]);
   const [selectedArtwork, setSelectedArtwork] = useState<ArtworkPost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,7 +45,7 @@ export default function MuseumModule({ currentUser, onRefreshData }: MuseumModul
 
   useEffect(() => {
     fetchArtworks();
-  }, []);
+  }, [globalRefreshCount]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

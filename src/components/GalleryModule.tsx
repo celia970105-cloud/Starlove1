@@ -8,9 +8,10 @@ import { compressImage } from "../lib/imageCompressor";
 interface GalleryModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
-export default function GalleryModule({ currentUser, onRefreshData }: GalleryModuleProps) {
+export default function GalleryModule({ currentUser, onRefreshData, globalRefreshCount }: GalleryModuleProps) {
   const [photos, setPhotos] = useState<PhotoPost[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoPost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,7 +101,7 @@ export default function GalleryModule({ currentUser, onRefreshData }: GalleryMod
 
   useEffect(() => {
     fetchPhotos();
-  }, []);
+  }, [globalRefreshCount]);
 
   // Filter photos
   const filteredPhotos = photos.filter((photo) => {

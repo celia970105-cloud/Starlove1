@@ -10,6 +10,7 @@ import { backupCandyToStorageAndUser } from "../lib/syncHelper";
 interface CandyJarModuleProps {
   currentUser: UserType | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
 // Pre-defined candy styles for aesthetic rendering
@@ -22,7 +23,7 @@ const CANDY_STYLES = [
   { icon: "🍬", color: "from-orange-400 to-amber-300", wrapper: "🍊", shadow: "shadow-orange-300/40", flavor: "極速暖陽橘子軟糖 ☀️" }
 ];
 
-export default function CandyJarModule({ currentUser, onRefreshData }: CandyJarModuleProps) {
+export default function CandyJarModule({ currentUser, onRefreshData, globalRefreshCount }: CandyJarModuleProps) {
   const [candies, setCandies] = useState<CandyPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,7 +84,7 @@ export default function CandyJarModule({ currentUser, onRefreshData }: CandyJarM
 
   useEffect(() => {
     fetchCandies();
-  }, []);
+  }, [globalRefreshCount]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

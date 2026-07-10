@@ -35,7 +35,47 @@ const SEED_DATA = {
   posts_videos: [] as any[],
   posts_letters: [] as any[],
   posts_artworks: [] as any[],
-  posts_music: [] as any[],
+  posts_music: [
+    {
+      id: "m_seed_1",
+      user_id: "anonymous",
+      username: "星軌應援組",
+      status: "approved",
+      title: "星河之下 (鋼琴唯美伴奏)",
+      artist: "星願鋼琴組",
+      audio_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      cover_url: "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=500",
+      duration: "6:12",
+      role: "user",
+      created_at: new Date(Date.now() - 3600000 * 48).toISOString()
+    },
+    {
+      id: "m_seed_2",
+      user_id: "anonymous",
+      username: "極禹大糖推廣員",
+      status: "approved",
+      title: "《雙生》 (雙向奔赴舞台原聲)",
+      artist: "張極 & 張澤禹 (TF家族)",
+      audio_url: "https://www.bilibili.com/video/BV1pG411d7fF",
+      cover_url: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500",
+      duration: "3:30",
+      role: "user",
+      created_at: new Date(Date.now() - 3600000 * 24).toISOString()
+    },
+    {
+      id: "m_seed_3",
+      user_id: "anonymous",
+      username: "匿名的甜味星星",
+      status: "approved",
+      title: "《不完美小孩》 (純享感人合唱)",
+      artist: "張極 & 張澤禹 (TF家族)",
+      audio_url: "https://www.bilibili.com/video/BV1T54y1q7z8",
+      cover_url: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500",
+      duration: "3:45",
+      role: "user",
+      created_at: new Date(Date.now() - 3600000 * 12).toISOString()
+    }
+  ] as any[],
   posts_candies: [
     {
       id: "c_seed_1",
@@ -193,7 +233,12 @@ export async function getDbKey(key: string): Promise<any> {
       return localCandies;
     }
     const local = localStorage.getItem(`starry_local_${key}`);
-    return local ? JSON.parse(local) : defaultValue;
+    let parsed = local ? JSON.parse(local) : null;
+    if (key === "posts_music" && (!parsed || !Array.isArray(parsed) || parsed.length === 0)) {
+      localStorage.setItem(`starry_local_posts_music`, JSON.stringify(defaultValue));
+      parsed = defaultValue;
+    }
+    return parsed ? parsed : defaultValue;
   }
 
   try {
@@ -378,7 +423,12 @@ export async function getDbKey(key: string): Promise<any> {
       return localCandies;
     }
     const local = localStorage.getItem(`starry_local_${key}`);
-    return local ? JSON.parse(local) : defaultValue;
+    let parsed = local ? JSON.parse(local) : null;
+    if (key === "posts_music" && (!parsed || !Array.isArray(parsed) || parsed.length === 0)) {
+      localStorage.setItem(`starry_local_posts_music`, JSON.stringify(defaultValue));
+      parsed = defaultValue;
+    }
+    return parsed ? parsed : defaultValue;
   }
 }
 
@@ -2092,11 +2142,14 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         if (collection.some((m: any) => m.status !== "rejected" && m.title.trim().toLowerCase() === title.toLowerCase())) {
           return jsonResponse({ error: "此音樂名稱已存在，請使用其他名稱！" }, 400);
         }
-        const audioUrl = (payload.audio_url || "").trim();
-        const isBili = audioUrl.toLowerCase().includes("bilibili.com") || audioUrl.toLowerCase().includes("b23.tv");
-        const isQQ = audioUrl.toLowerCase().includes("qq.com");
-        if (!isBili && !isQQ) {
-          return jsonResponse({ error: "音樂網址格式錯誤！應援投稿僅限使用 QQ音樂 或 bilibili 網址。" }, 400);
+         const audioUrl = (payload.audio_url || "").trim();
+        const lowerUrl = audioUrl.toLowerCase();
+        const isBili = lowerUrl.includes("bilibili.com") || lowerUrl.includes("b23.tv");
+        const isQQ = lowerUrl.includes("qq.com");
+        const isYt = lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be");
+        const isDirect = !!(lowerUrl.match(/\.(mp3|wav|ogg|m4a|aac|webm)/i) || ((lowerUrl.startsWith("http://") || lowerUrl.startsWith("https://")) && !isBili && !isQQ && !isYt));
+        if (!isBili && !isQQ && !isYt && !isDirect) {
+          return jsonResponse({ error: "音樂網址格式錯誤！應援投稿限使用 QQ音樂、bilibili 或直接音訊檔 (.mp3, .wav, .m4a) 等連結。" }, 400);
         }
         const coverUrl = await uploadBase64ToStorage(payload.cover_url);
         const post = {

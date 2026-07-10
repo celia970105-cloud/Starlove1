@@ -11,10 +11,34 @@ let globalTracks: MusicPost[] = [];
 
 if (typeof window !== "undefined") {
   if (!(window as any).__shared_starry_audio__) {
-    (window as any).__shared_starry_audio__ = new Audio();
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
+    (window as any).__shared_starry_audio__ = audio;
   }
   sharedAudio = (window as any).__shared_starry_audio__;
 }
+
+const checkIsDirectAudio = (url: string) => {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  // Standard direct audio extensions
+  if (lowerUrl.match(/\.(mp3|wav|ogg|m4a|aac|webm)/i)) {
+    return true;
+  }
+  // If it's a known embed platform, it's not direct audio
+  if (
+    lowerUrl.includes("bilibili.com") ||
+    lowerUrl.includes("b23.tv") ||
+    lowerUrl.includes("qq.com") ||
+    lowerUrl.includes("youtube.com") ||
+    lowerUrl.includes("youtu.be")
+  ) {
+    return false;
+  }
+  // Any other URL can be treated as direct audio fallback (e.g. general audio streaming urls or CDNs)
+  return lowerUrl.startsWith("http://") || lowerUrl.startsWith("https://");
+};
 
 interface MusicPlayerProps {
   currentUser: User | null;
@@ -254,7 +278,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
         if (data.length > 0) {
           const track = data[globalCurrentIdx] || data[0];
           const audioUrl = track?.audio_url || "";
-          const isDirect = audioUrl ? audioUrl.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+          const isDirect = checkIsDirectAudio(audioUrl);
           if (isDirect && sharedAudio && !sharedAudio.src) {
             sharedAudio.src = audioUrl;
           } else if (!isDirect && isPlaying && audioUrl) {
@@ -285,14 +309,14 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     if (!sharedAudio) return;
 
     const onTimeUpdate = () => {
-      const isDirect = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+      const isDirect = currentTrack?.audio_url ? checkIsDirectAudio(currentTrack.audio_url) : false;
       if (isDirect) {
         setCurrentTime(sharedAudio!.currentTime);
       }
     };
 
     const onDurationChange = () => {
-      const isDirect = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+      const isDirect = currentTrack?.audio_url ? checkIsDirectAudio(currentTrack.audio_url) : false;
       if (isDirect) {
         setDuration(sharedAudio!.duration || 180);
       }
@@ -331,7 +355,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   useEffect(() => {
     if (!isPlaying || !currentTrack) return;
     
-    const isDirectAudio = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+    const isDirectAudio = currentTrack?.audio_url ? checkIsDirectAudio(currentTrack.audio_url) : false;
     if (isDirectAudio) return; // Managed natively by HTML5 audio
 
     const interval = setInterval(() => {
@@ -360,7 +384,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     setDuration(210); // Standard simulated duration (3:30)
 
     const audioUrl = track.audio_url || "";
-    const isDirectAudio = audioUrl ? audioUrl.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+    const isDirectAudio = checkIsDirectAudio(audioUrl);
     
     if (isDirectAudio) {
       if (sharedAudio) {
@@ -371,6 +395,8 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
           sharedAudio.load();
         }
         if (autoPlay) {
+          sharedAudio.muted = false;
+          sharedAudio.volume = volume;
           sharedAudio.play()
             .then(() => setIsPlaying(true))
             .catch(e => console.log("Playback error:", e));
@@ -397,7 +423,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     if (tracks.length === 0 || !currentTrack) return;
     
     const audioUrl = currentTrack.audio_url || "";
-    const isDirectAudio = audioUrl ? audioUrl.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+    const isDirectAudio = checkIsDirectAudio(audioUrl);
 
     if (isPlaying) {
       if (isDirectAudio && sharedAudio) {
@@ -411,6 +437,8 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
           sharedAudio.src = audioUrl;
           sharedAudio.load();
         }
+        sharedAudio.muted = false;
+        sharedAudio.volume = volume;
         sharedAudio.play()
           .then(() => setIsPlaying(true))
           .catch(err => {
@@ -440,7 +468,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    const isDirectAudio = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
+    const isDirectAudio = currentTrack?.audio_url ? checkIsDirectAudio(currentTrack.audio_url) : false;
     if (isDirectAudio && sharedAudio) {
       sharedAudio.currentTime = val;
     }
@@ -481,12 +509,14 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
       return;
     }
 
-    // Client-side QQ Music / Bilibili validation
+    // Client-side QQ Music / Bilibili / YouTube / Direct Audio validation
     const trimmedUrl = newAudioUrl.trim();
     const isBili = trimmedUrl.toLowerCase().includes("bilibili.com") || trimmedUrl.toLowerCase().includes("b23.tv");
     const isQQ = trimmedUrl.toLowerCase().includes("qq.com");
-    if (!isBili && !isQQ) {
-      setSubmitError("音樂投稿失敗！網址限用 QQ音樂 或 bilibili 網址。");
+    const isYt = trimmedUrl.toLowerCase().includes("youtube.com") || trimmedUrl.toLowerCase().includes("youtu.be");
+    const isDirect = checkIsDirectAudio(trimmedUrl);
+    if (!isBili && !isQQ && !isYt && !isDirect) {
+      setSubmitError("音樂投稿失敗！網址限用 QQ音樂、bilibili 或直接音訊檔 (.mp3, .wav, .m4a) 等連結。");
       return;
     }
 

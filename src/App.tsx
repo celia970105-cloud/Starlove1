@@ -1189,7 +1189,7 @@ export default function App() {
                     黑膠音軌唱片機
                   </h3>
                 </div>
-                <MusicPlayer currentUser={currentUser} onRefreshData={refreshCurrentUser} globalRefreshCount={globalRefreshCount} />
+                <div id="starry-music-box-container" />
               </div>
             </motion.div>
           )}
@@ -1549,6 +1549,14 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Globally mounted music player to support background playback and portals */}
+      <MusicPlayer
+        currentUser={currentUser}
+        onRefreshData={refreshCurrentUser}
+        globalRefreshCount={globalRefreshCount}
+        activeModule={activeModule}
+      />
     </div>
   );
 }

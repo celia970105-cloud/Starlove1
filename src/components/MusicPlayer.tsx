@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Plus, Sparkles, AlertCircle, FileText, CheckCircle, Palette, Settings, Sliders, Eye, EyeOff, Check } from "lucide-react";
 import { MusicPost, User } from "../types";
@@ -19,6 +20,7 @@ interface MusicPlayerProps {
   currentUser: User | null;
   onRefreshData?: () => void;
   globalRefreshCount?: number;
+  activeModule?: string;
 }
 
 const THEMES = {
@@ -123,7 +125,7 @@ const parseEmbedUrl = (url: string) => {
   return url;
 };
 
-export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshCount }: MusicPlayerProps) {
+export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshCount, activeModule }: MusicPlayerProps) {
   const [tracks, setTracks] = useState<MusicPost[]>(globalTracks);
   const [currentIdx, setCurrentIdx] = useState(globalCurrentIdx);
   const [isPlaying, setIsPlaying] = useState(sharedAudio ? !sharedAudio.paused && !!sharedAudio.src : false);
@@ -179,6 +181,33 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   });
 
   const [showCustomizePanel, setShowCustomizePanel] = useState(false);
+
+  // Portal target tracking state for inline rendering on home tab
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (activeModule === "home") {
+      const getTarget = () => {
+        const el = document.getElementById("starry-music-box-container");
+        if (el) {
+          setPortalTarget(el);
+          return true;
+        }
+        return false;
+      };
+
+      if (!getTarget()) {
+        const interval = setInterval(() => {
+          if (getTarget()) {
+            clearInterval(interval);
+          }
+        }, 100);
+        return () => clearInterval(interval);
+      }
+    } else {
+      setPortalTarget(null);
+    }
+  }, [activeModule]);
 
   // Submission Form State
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -512,16 +541,17 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     }
   };
 
-  return (
-    <>
-      <div 
-        className={`w-full max-w-4xl mx-auto p-6 rounded-[32px] relative overflow-hidden transition-all duration-500 border ${currentTheme.border} ${currentTheme.text} ${
-          panelBg === "frosted" 
-            ? "bg-white/70 backdrop-blur-md shadow-xl" 
-            : panelBg === "glossy" 
-            ? "bg-white/95 shadow-2xl" 
-            : `bg-gradient-to-tr from-white via-white/85 to-[${currentTheme.accent}]/5 backdrop-blur-md shadow-xl`
-        }`}
+  const renderFullPlayer = () => {
+    return (
+      <>
+        <div 
+          className={`w-full max-w-4xl mx-auto p-6 rounded-[32px] relative overflow-hidden transition-all duration-500 border ${currentTheme.border} ${currentTheme.text} ${
+            panelBg === "frosted" 
+              ? "bg-white/70 backdrop-blur-md shadow-xl" 
+              : panelBg === "glossy" 
+              ? "bg-white/95 shadow-2xl" 
+              : `bg-gradient-to-tr from-white via-white/85 to-[${currentTheme.accent}]/5 backdrop-blur-md shadow-xl`
+          }`}
         style={{
           boxShadow: glowIntensity === "neon" 
             ? `0 20px 40px -5px ${currentTheme.accent}77` 
@@ -850,12 +880,32 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
           <div>
             {currentTrack ? (
               <div className="text-left">
-                <span 
-                  className="inline-block px-3 py-1 rounded-full text-[10px] font-mono font-semibold border mb-3"
-                  style={{ color: currentTheme.accent, borderColor: currentTheme.accent + "33", backgroundColor: currentTheme.accent + "0c" }}
-                >
-                  NOW PLAYING • {(currentTrack.audio_url || "").includes("bilibili") ? "bilibili" : "QQ音樂"}
-                </span>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <span 
+                    className="inline-block px-3 py-1 rounded-full text-[10px] font-mono font-semibold border"
+                    style={{ color: currentTheme.accent, borderColor: currentTheme.accent + "33", backgroundColor: currentTheme.accent + "0c" }}
+                  >
+                    NOW PLAYING • {(currentTrack.audio_url || "").includes("bilibili") ? "bilibili" : "QQ音樂"}
+                  </span>
+                  {iframeUrl && (
+                    <button
+                      onClick={() => setShowIframeWindow(prev => prev === "hidden" ? "compact" : "hidden")}
+                      className="flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-all font-medium shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      {showIframeWindow === "hidden" ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+                          <span>📺 開啟視窗看畫面</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5 text-rose-500" />
+                          <span>❌ 關閉視窗後台播</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
                 <h3 className="text-2xl font-serif font-semibold tracking-wide" style={{ color: currentTheme.accent }}>
                   {currentTrack.title}
                 </h3>
@@ -1127,4 +1177,112 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
       </AnimatePresence>
     </>
   );
+};
+
+  const renderFloatingPlayer = () => {
+    if (!currentTrack) return null;
+
+    return (
+      <div className="fixed bottom-24 md:bottom-6 left-4 z-[45] flex flex-col gap-2 max-w-[280px] sm:max-w-xs pointer-events-none">
+        {/* Floating Iframe Screen */}
+        {iframeUrl && showIframeWindow !== "hidden" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.9 }}
+            className="rounded-2xl overflow-hidden border border-[#FF799C]/25 shadow-2xl bg-white/95 w-[260px] sm:w-[320px] pointer-events-auto"
+          >
+            <div className="px-3 py-1 bg-gray-50 text-[10px] font-mono flex items-center justify-between text-gray-500 border-b border-gray-100">
+              <span className="truncate pr-2">📺 {currentTrack.title}</span>
+              <button 
+                onClick={() => setShowIframeWindow("hidden")}
+                className="text-gray-400 hover:text-rose-500 text-xs font-bold cursor-pointer"
+                title="關閉視窗"
+              >
+                ✕
+              </button>
+            </div>
+            <iframe src={iframeUrl} className="w-full h-40 border-0" allow="autoplay; encrypted-media" />
+          </motion.div>
+        )}
+
+        {/* Mini Player Control Bar */}
+        <div 
+          className={`flex items-center gap-3 p-2.5 rounded-2xl border ${currentTheme.border} ${currentTheme.text} bg-white/90 backdrop-blur-md shadow-2xl pointer-events-auto`}
+          style={{
+            boxShadow: `0 8px 30px rgba(0,0,0,0.12), 0 0 15px ${currentTheme.accent}22`
+          }}
+        >
+          {/* Rotating Vinyl Cover */}
+          <div 
+            className="h-10 w-10 rounded-full bg-neutral-950 border border-gray-200 shrink-0 relative flex items-center justify-center overflow-hidden cursor-pointer"
+            onClick={togglePlay}
+            title={isPlaying ? "點擊暫停" : "點擊播放"}
+          >
+            {currentTrack.cover_url ? (
+              <img 
+                src={currentTrack.cover_url} 
+                alt="" 
+                className="h-full w-full object-cover animate-[spin_14s_linear_infinite]"
+                style={{ 
+                  animationPlayState: isPlaying ? "running" : "paused"
+                }}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <Music className="h-4 w-4" style={{ color: currentTheme.accent }} />
+            )}
+            <div className="absolute inset-0 m-auto h-2.5 w-2.5 rounded-full bg-neutral-950 border border-neutral-800" />
+          </div>
+
+          {/* Title & Artist */}
+          <div className="text-left min-w-0 flex-1">
+            <p className="text-[11px] font-bold truncate max-w-[100px] sm:max-w-[120px]" style={{ color: currentTheme.accent }}>
+              {currentTrack.title}
+            </p>
+            <p className="text-[9px] opacity-70 truncate max-w-[100px]">
+              {currentTrack.artist}
+            </p>
+          </div>
+
+          {/* Quick controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {iframeUrl && (
+              <button
+                onClick={() => setShowIframeWindow(prev => prev === "hidden" ? "compact" : "hidden")}
+                className="p-1.5 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-gray-100 transition-colors text-gray-500 cursor-pointer"
+                title={showIframeWindow === "hidden" ? "顯示畫面" : "隱藏畫面"}
+              >
+                <Eye className={`h-3.5 w-3.5 ${showIframeWindow !== "hidden" ? "text-emerald-500 animate-pulse" : "text-gray-400"}`} />
+              </button>
+            )}
+            
+            <button
+              onClick={togglePlay}
+              className="p-1.5 rounded-full text-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              style={{ backgroundColor: currentTheme.accent }}
+              title={isPlaying ? "暫停" : "播放"}
+            >
+              {isPlaying ? <Pause className="h-3 w-3 fill-white" /> : <Play className="h-3 w-3 fill-white ml-0.5" />}
+            </button>
+
+            <button
+              onClick={nextTrack}
+              className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 active:scale-95 transition-all cursor-pointer"
+              title="下一首"
+            >
+              <SkipForward className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (activeModule === "home") {
+    if (!portalTarget) return null;
+    return createPortal(renderFullPlayer(), portalTarget);
+  }
+
+  return renderFloatingPlayer();
 }

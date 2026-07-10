@@ -36,6 +36,13 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Custom Category States
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [category, setCategory] = useState("General");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+
   // Preview States
   const [previewTab, setPreviewTab] = useState<"wrapped" | "revealed">("wrapped");
   const [previewStyleIndex, setPreviewStyleIndex] = useState<number | null>(null);
@@ -52,8 +59,12 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
     setIsLoading(true);
     setErrorMsg("");
     try {
-      // Fetch all posts and filter for candies
-      const res = await fetch("/api/posts/feed/latest");
+      // Fetch posts and categories together
+      const [res, catRes] = await Promise.all([
+        fetch("/api/posts/feed/latest"),
+        fetch("/api/custom_categories")
+      ]);
+      
       if (res.ok) {
         const data: CandyPost[] = await res.json();
         // The feed returns all posts; let's filter for candies of status === "approved"
@@ -64,6 +75,14 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
         updateJarDisplay(filtered);
       } else {
         setErrorMsg("無法讀取糖果罐內容。");
+      }
+
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const filteredCats = catData
+          .filter((item: any) => item.module === "candies")
+          .map((item: any) => item.category);
+        setCustomCategories(filteredCats);
       }
     } catch (err) {
       setErrorMsg("讀取糖果罐失敗，請稍候重試。");
@@ -102,10 +121,12 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
 
     setIsSubmitting(true);
     try {
+      const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
         title: candyName,
         content: analysisContent,
         is_anonymous: isAnonymous,
+        category: finalCategory,
         user_id: currentUser?.id || "anonymous",
         username: currentUser?.username || "Anonymous",
         role: currentUser?.role || "user"
@@ -138,6 +159,8 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
         setIsAnonymous(false);
         setPreviewStyleIndex(null);
         setPreviewTab("wrapped");
+        setIsCustomCategory(false);
+        setCustomCategory("");
         fetchCandies();
         if (onRefreshData) onRefreshData();
       } else {
@@ -177,6 +200,12 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
     const code = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return CANDY_STYLES[code % CANDY_STYLES.length];
   };
+
+  const candyCategories = ["All", "General", ...customCategories];
+  const filteredCandies = candies.filter((candy) => {
+    if (selectedCategory === "All") return true;
+    return candy.category === selectedCategory;
+  });
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 text-left text-[#6E4B55]">
@@ -429,6 +458,50 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
                     <span className="text-[10px] text-[#6E4B55]/40 block text-right font-mono">{candyName.length}/40 字</span>
                   </div>
 
+                  {/* Category Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-[#6E4B55]/80">糖果分類 (Category) *</label>
+                      <select
+                        value={isCustomCategory ? "Custom" : category}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "Custom") {
+                            setIsCustomCategory(true);
+                          } else {
+                            setIsCustomCategory(false);
+                            setCategory(val);
+                          }
+                        }}
+                        className="w-full text-xs p-3 bg-white border border-[#FF799C]/15 hover:border-[#FF799C]/30 focus:border-[#FF799C] rounded-xl outline-none transition-all text-[#6E4B55]"
+                      >
+                        <option value="General">一般糖點</option>
+                        {customCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="Custom">✨ 自定義糖果類別 (Custom)</option>
+                      </select>
+                    </div>
+
+                    {isCustomCategory && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="space-y-1.5"
+                      >
+                        <label className="block text-xs font-bold text-[#6E4B55]/80">自定義糖果類別名稱</label>
+                        <input
+                          type="text"
+                          required
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          placeholder="例如：後台細節、同人文、舞台..."
+                          className="w-full text-xs p-3 bg-white border border-[#FF799C]/15 hover:border-[#FF799C]/30 focus:border-[#FF799C] rounded-xl outline-none transition-all placeholder:text-gray-400"
+                        />
+                      </motion.div>
+                    )}
+                  </div>
+
                   {/* Candy Analysis Content */}
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-[#6E4B55]/80">糖點分析內容 (Sugar Analysis Content)</label>
@@ -643,15 +716,32 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
             exit={{ opacity: 0, y: -10 }}
             className="space-y-4"
           >
+            {/* Category Tabs */}
+            <div className="flex flex-wrap gap-2 pb-2">
+              {candyCategories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-4 py-1.5 rounded-full text-xs transition-all ${
+                    selectedCategory === cat
+                      ? "bg-[#FF799C] text-white shadow-sm font-semibold"
+                      : "bg-[#FFF6F2]/60 hover:bg-[#FFF6F2] text-[#6E4B55] border border-[#FF799C]/10"
+                  }`}
+                >
+                  {cat === "All" ? "全部糖果" : cat === "General" ? "一般糖點" : cat}
+                </button>
+              ))}
+            </div>
+
             {/* List all approved candies */}
-            {candies.length === 0 ? (
+            {filteredCandies.length === 0 ? (
               <div className="text-center py-16 bg-[#FFF6F2]/30 border border-dashed border-[#FF799C]/20 rounded-3xl">
                 <HelpCircle className="h-10 w-10 text-[#FF799C]/50 mx-auto mb-2 animate-bounce" />
-                <p className="text-xs text-[#6E4B55]/50">目前還沒有公開的糖果分析帖。快來投遞第一個好料吧！</p>
+                <p className="text-xs text-[#6E4B55]/50">此類別目前還沒有公開的糖果分析帖。快來投遞第一個好料吧！</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {candies.map((candy) => {
+                {filteredCandies.map((candy) => {
                   const style = getCandyStyle(candy.id);
                   return (
                     <div 

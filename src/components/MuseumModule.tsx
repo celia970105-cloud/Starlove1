@@ -22,6 +22,11 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [category, setCategory] = useState("General");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
@@ -29,12 +34,22 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/posts/artworks");
+      const [res, catRes] = await Promise.all([
+        fetch("/api/posts/artworks"),
+        fetch("/api/custom_categories")
+      ]);
       if (res.ok) {
         const data = await res.json();
         setArtworks(data);
       } else {
         setError("載入同人美術館失敗，請稍後重試。");
+      }
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const filtered = catData
+          .filter((item: any) => item.module === "artworks")
+          .map((item: any) => item.category);
+        setCustomCategories(filtered);
       }
     } catch (err) {
       setError("連線伺服器失敗。");
@@ -90,11 +105,13 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
     }
 
     try {
+      const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
         title,
         image_url: imageUrl,
         external_link: "",
         description,
+        category: finalCategory,
         user_id: currentUser?.id || "anonymous",
         username: currentUser?.username || "Anonymous Visitor",
         role: currentUser?.role || "user"
@@ -112,6 +129,8 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
         setTitle("");
         setImageUrl("");
         setDescription("");
+        setIsCustomCategory(false);
+        setCustomCategory("");
         if (currentUser?.role === "admin") {
           fetchArtworks();
         }
@@ -135,6 +154,12 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
       setSubmitError("伺服器連線中斷。");
     }
   };
+
+  const artworkCategories = ["All", "General", ...customCategories];
+  const filteredArtworks = artworks.filter(art => {
+    if (selectedCategory === "All") return true;
+    return art.category === selectedCategory;
+  });
 
   return (
     <div className="space-y-6">
@@ -163,6 +188,23 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
         「星願美術館」是由全球粉絲為 Zack、Jeremy 與 Jiyu 共同創作的殿堂。每一幅畫作都是愛與星夜的凝結，帶有浪漫粉嫩的奇幻幻想。
       </div>
 
+      {/* Category Tabs */}
+      <div className="flex flex-wrap gap-2 pb-2">
+        {artworkCategories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-4 py-1.5 rounded-full text-xs transition-all ${
+              selectedCategory === cat
+                ? "bg-[#FF799C] text-white shadow-sm font-semibold"
+                : "bg-white/50 hover:bg-white text-[#6E4B55] border border-[#FF799C]/10"
+            }`}
+          >
+            {cat === "All" ? "全部畫作" : cat === "General" ? "一般創作" : cat}
+          </button>
+        ))}
+      </div>
+
       {/* Grid Content */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -175,15 +217,15 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
           <AlertCircle className="h-12 w-12 text-[#FF799C] mx-auto mb-3" />
           <p className="text-[#6E4B55] font-serif">{error}</p>
         </div>
-      ) : artworks.length === 0 ? (
+      ) : filteredArtworks.length === 0 ? (
         <div className="text-center py-16 bg-[#FFF6F2]/40 border border-[#FF799C]/15 rounded-3xl">
           <Palette className="h-12 w-12 text-[#FF799C] mx-auto mb-3 opacity-40 animate-pulse" />
-          <p className="text-[#FF799C] font-serif text-lg">目前美術館空無一物</p>
+          <p className="text-[#FF799C] font-serif text-lg">此類別目前空無一物</p>
           <p className="text-[#6E4B55]/60 text-xs mt-1">遞交你的第一幅絕美畫作來裝飾這座浪漫神殿吧！</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {artworks.map((art) => (
+          {filteredArtworks.map((art) => (
             <motion.div
               layout
               key={art.id}
@@ -448,6 +490,50 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
                           <X className="h-4 w-4" />
                         </button>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Category Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">作品分類 *</label>
+                      <select
+                        value={isCustomCategory ? "Custom" : category}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "Custom") {
+                            setIsCustomCategory(true);
+                          } else {
+                            setIsCustomCategory(false);
+                            setCategory(val);
+                          }
+                        }}
+                        className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
+                      >
+                        <option value="General">一般創作</option>
+                        {customCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="Custom">✨ 自定義創作類別 (Custom)</option>
+                      </select>
+                    </div>
+
+                    {isCustomCategory && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="space-y-1.5"
+                      >
+                        <label className="block text-xs font-mono text-[#6E4B55]/70">請輸入自定義類別名稱</label>
+                        <input
+                          type="text"
+                          required
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          placeholder="例如：同人漫畫、Q版繪圖..."
+                          className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-xs px-3.5 py-2.5 rounded-xl transition-all"
+                        />
+                      </motion.div>
                     )}
                   </div>
 

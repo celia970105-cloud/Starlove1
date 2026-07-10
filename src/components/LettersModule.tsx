@@ -22,6 +22,11 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [content, setContent] = useState("");
   const [colorTheme, setColorTheme] = useState("pink");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [category, setCategory] = useState("General");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
@@ -67,12 +72,22 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/posts/letters");
+      const [res, catRes] = await Promise.all([
+        fetch("/api/posts/letters"),
+        fetch("/api/custom_categories")
+      ]);
       if (res.ok) {
         const data = await res.json();
         setLetters(data);
       } else {
         setError("無法載入星願信箱，請稍後重試。");
+      }
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const filtered = catData
+          .filter((item: any) => item.module === "letters")
+          .map((item: any) => item.category);
+        setCustomCategories(filtered);
       }
     } catch (err) {
       setError("無法與伺服器建立連線。");
@@ -103,11 +118,13 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
     }
 
     try {
+      const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
         author_name: isAnonymous ? "Anonymous Star" : (authorName || "Stardust"),
         content,
         is_anonymous: isAnonymous,
         color_theme: colorTheme,
+        category: finalCategory,
         user_id: currentUser?.id || "anonymous",
         username: currentUser?.username || "Anonymous",
         role: currentUser?.role || "user"
@@ -124,6 +141,8 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
         setSubmitSuccess(true);
         setContent("");
         setIsAnonymous(false);
+        setIsCustomCategory(false);
+        setCustomCategory("");
         if (currentUser?.role === "admin") {
           fetchLetters();
         }
@@ -147,6 +166,12 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
       setSubmitError("伺服器連線中斷。");
     }
   };
+
+  const letterCategories = ["All", "General", ...customCategories];
+  const filteredLetters = letters.filter(letter => {
+    if (selectedCategory === "All") return true;
+    return letter.category === selectedCategory;
+  });
 
   return (
     <div className="space-y-6">
@@ -173,6 +198,23 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
         </button>
       </div>
 
+      {/* Category Tabs */}
+      <div className="flex flex-wrap gap-2 pb-2">
+        {letterCategories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-4 py-1.5 rounded-full text-xs transition-all ${
+              selectedCategory === cat
+                ? "bg-[#FF799C] text-white shadow-sm font-semibold"
+                : "bg-white/50 hover:bg-white text-[#6E4B55] border border-[#FF799C]/10"
+            }`}
+          >
+            {cat === "All" ? "全部信件" : cat === "General" ? "一般應援" : cat}
+          </button>
+        ))}
+      </div>
+
       {/* Main Board: Interactive Galaxy Jar */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
         
@@ -194,22 +236,17 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
               <div className="w-[85%] h-1 bg-white/60 rounded-full top-1 absolute" />
             </div>
             
-            {/* Hanging Tag */}
-            <div className="absolute top-10 left-[75%] origin-top -rotate-12 px-2 py-1 bg-[#FF799C]/15 border border-[#FF799C]/30 text-[#FFCCDD] rounded text-[9px] font-mono shadow-sm">
-              ALL FOR JIYU
-            </div>
-
             {/* Glowing stars inside jar */}
             {isLoading ? (
               <div className="text-center text-xs font-mono text-white/30">星雲信封封裝中...</div>
-            ) : letters.length === 0 ? (
+            ) : filteredLetters.length === 0 ? (
               <div className="text-center p-6 text-[#6E4B55]/50 text-xs font-serif max-w-xs leading-relaxed">
                 星星罐此時是空的。<br />
                 寫下第一封信裝進去，投射到浩瀚的星河吧！
               </div>
             ) : (
               <div className="absolute inset-x-4 inset-y-10">
-                {letters.slice(0, 16).map((letter, idx) => {
+                {filteredLetters.slice(0, 16).map((letter, idx) => {
                   // Standard math deterministic layout inside the jar bounding box
                   const angles = [
                     { t: 15, l: 30 }, { t: 30, l: 65 }, { t: 45, l: 20 }, { t: 55, l: 50 },
@@ -258,16 +295,16 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
         <div className="lg:col-span-5 flex flex-col h-full space-y-4">
           <div className="bg-white/50 p-5 rounded-3xl border border-[#FF799C]/15 flex-1 flex flex-col min-h-[450px]">
             <span className="text-xs font-mono tracking-widest text-[#6E4B55]/50 text-left block mb-4 uppercase">
-              RECENT LETTERS ({letters.length})
+              RECENT LETTERS ({filteredLetters.length})
             </span>
 
             <div className="space-y-3 overflow-y-auto max-h-[400px] flex-1 pr-1.5">
               {isLoading ? (
                 <div className="text-center py-12 text-xs font-mono text-[#6E4B55]/40">載入信件列表中...</div>
-              ) : letters.length === 0 ? (
-                <div className="text-center py-12 text-xs font-serif text-[#6E4B55]/40">尚未收到應援來信</div>
+              ) : filteredLetters.length === 0 ? (
+                <div className="text-center py-12 text-xs font-serif text-[#6E4B55]/40">此類別尚未收到應援來信</div>
               ) : (
-                letters.map((letter) => {
+                filteredLetters.map((letter) => {
                   const theme = themeColors[letter.color_theme] || themeColors.pink;
                   return (
                     <div
@@ -458,6 +495,50 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
                     <div className="text-[10px] text-[#6E4B55]/40 text-right mt-1">
                       {content.length}/240 字
                     </div>
+                  </div>
+
+                  {/* Category Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">寄語類別</label>
+                      <select
+                        value={isCustomCategory ? "Custom" : category}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "Custom") {
+                            setIsCustomCategory(true);
+                          } else {
+                            setIsCustomCategory(false);
+                            setCategory(val);
+                          }
+                        }}
+                        className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
+                      >
+                        <option value="General">一般應援</option>
+                        {customCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="Custom">✨ 自定義應援類別 (Custom)</option>
+                      </select>
+                    </div>
+
+                    {isCustomCategory && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="space-y-1.5"
+                      >
+                        <label className="block text-xs font-mono text-[#6E4B55]/70">請輸入自定義類別名稱</label>
+                        <input
+                          type="text"
+                          required
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          placeholder="例如：生日祝福、聖誕賀詞..."
+                          className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-xs px-3.5 py-2.5 rounded-xl transition-all"
+                        />
+                      </motion.div>
+                    )}
                   </div>
 
                   {/* Nebula Color selection */}

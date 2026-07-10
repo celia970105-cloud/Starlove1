@@ -47,7 +47,8 @@ const SEED_DATA = {
     date: new Date().toISOString().split("T")[0],
     users: {}
   },
-  leaderboard_history: []
+  leaderboard_history: [],
+  custom_categories: [] as any[]
 };
 
 // Storage bucket & table configurations
@@ -67,11 +68,126 @@ const DB_KEYS = [
   "friend_snaps",
   "last_hourly_trigger",
   "leaderboard_state",
-  "leaderboard_history"
+  "leaderboard_history",
+  "custom_categories"
 ];
 
-// Helper to read database key
+// Simple IndexedDB Helper
+const DB_NAME = "StarryWishDB";
+const STORE_NAME = "LargeMediaStore";
+
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      reject(new Error("IndexedDB is not supported or not running in a browser environment"));
+      return;
+    }
+    const request = window.indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = (e: any) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = (e: any) => resolve(e.target.result);
+    request.onerror = (e: any) => reject(e.target.error);
+  });
+}
+
+export async function saveToIDB(key: string, value: string): Promise<void> {
+  try {
+    const db = await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.put(value, key);
+      request.onsuccess = () => resolve();
+      request.onerror = (e: any) => reject(e.target.error);
+    });
+  } catch (err) {
+    console.warn("Failed to save to IndexedDB:", err);
+  }
+}
+
+export async function getFromIDB(key: string): Promise<string | null> {
+  try {
+    const db = await openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(key);
+      request.onsuccess = (e: any) => resolve(e.target.result || null);
+      request.onerror = (e: any) => reject(e.target.error);
+    });
+  } catch (err) {
+    console.warn("Failed to get from IndexedDB:", err);
+    return null;
+  }
+}
+
+export async function resolveIndexedDbRefs(obj: any): Promise<any> {
+  if (!obj) return obj;
+  if (typeof obj === "string") {
+    if (obj.startsWith("indexeddb:")) {
+      const key = obj.substring("indexeddb:".length);
+      const val = await getFromIDB(key);
+      return val || obj; // fallback to ref if not found
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    const resolved = [];
+    for (const item of obj) {
+      resolved.push(await resolveIndexedDbRefs(item));
+    }
+    return resolved;
+  }
+  if (typeof obj === "object") {
+    const resolved: any = {};
+    for (const k of Object.keys(obj)) {
+      resolved[k] = await resolveIndexedDbRefs(obj[k]);
+    }
+    return resolved;
+  }
+  return obj;
+}
+
+export async function extractLargeMediaToIndexedDb(obj: any): Promise<any> {
+  if (!obj) return obj;
+  if (typeof obj === "string") {
+    // If it's a base64 string and long enough
+    if (obj.startsWith("data:") && obj.length > 2000) {
+      const key = `large_media_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      await saveToIDB(key, obj);
+      return `indexeddb:${key}`;
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    const extracted = [];
+    for (const item of obj) {
+      extracted.push(await extractLargeMediaToIndexedDb(item));
+    }
+    return extracted;
+  }
+  if (typeof obj === "object") {
+    const extracted: any = {};
+    for (const k of Object.keys(obj)) {
+      extracted[k] = await extractLargeMediaToIndexedDb(obj[k]);
+    }
+    return extracted;
+  }
+  return obj;
+}
+
+// Wrapped helper to read database key with transparent IndexedDB resolution
 export async function getDbKey(key: string): Promise<any> {
+  const result = await getDbKeyInternal(key);
+  return await resolveIndexedDbRefs(result);
+}
+
+// Inner helper to read database key
+async function getDbKeyInternal(key: string): Promise<any> {
   const defaultValue = (SEED_DATA as any)[key] || [];
 
   // 1. Recover/reconstruct local list of users from persistent backups if key is "users"
@@ -363,15 +479,16 @@ export async function getDbKey(key: string): Promise<any> {
 
 // Helper to write database key
 export async function setDbKey(key: string, value: any): Promise<void> {
+  const cleanValue = await extractLargeMediaToIndexedDb(value);
   // Save as-is first to local storage
-  localStorage.setItem(`starry_local_${key}`, JSON.stringify(value));
+  localStorage.setItem(`starry_local_${key}`, JSON.stringify(cleanValue));
   if (!supabase) {
     console.log(`[Database Native] Supabase is not connected. LocalStorage update success for [${key}]`);
     return;
   }
   try {
     if (key === "users") {
-      const cleanUsers = value.map((u: any) => ({
+      const cleanUsers = cleanValue.map((u: any) => ({
         id: u.id,
         username: u.username,
         email: u.email,
@@ -408,7 +525,7 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       console.log(`[Supabase Auth Sync Success] Users successfully upserted to profiles:`, data);
     } else if (key.startsWith("posts_")) {
       const type = key.replace("posts_", "");
-      const cleanPosts = value.map((p: any) => ({
+      const cleanPosts = cleanValue.map((p: any) => ({
         id: p.id,
         user_id: p.user_id || "anonymous",
         username: p.username || "Anonymous",
@@ -438,23 +555,23 @@ export async function setDbKey(key: string, value: any): Promise<void> {
       }
       console.log(`[Supabase Posts Sync Success] Posts for type [${type}] successfully upserted:`, data);
     } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
-      console.log(`[Supabase Collection Sync] Upserting key [${key}]:`, value);
-      const { data, error } = await supabase.from(key).upsert(value).select();
+      console.log(`[Supabase Collection Sync] Upserting key [${key}]:`, cleanValue);
+      const { data, error } = await supabase.from(key).upsert(cleanValue).select();
       if (error) {
         console.warn(`[Supabase Collection Sync Error] Failed to upsert [${key}]:`, error);
         throw error;
       }
       console.log(`[Supabase Collection Sync Success] Successfully synced [${key}]:`, data);
     } else {
-      console.log(`[Supabase State Sync] Upserting key [${key}] in starry_state:`, value);
+      console.log(`[Supabase State Sync] Upserting key [${key}] in starry_state:`, cleanValue);
       const { error } = await supabase
         .from("starry_state")
-        .upsert({ key, value });
+        .upsert({ key, value: cleanValue });
       if (error) {
         console.warn(`[Supabase State Sync] Initial upsert error, attempting update:`, error);
         const { error: updateError } = await supabase
           .from("starry_state")
-          .update({ value })
+          .update({ value: cleanValue })
           .eq("key", key);
         if (updateError) {
           console.warn(`[Supabase State Sync Error] Failed to update key [${key}]:`, updateError);
@@ -465,9 +582,9 @@ export async function setDbKey(key: string, value: any): Promise<void> {
     }
 
     // Since the database write succeeded, mark as synced: true in local storage!
-    let localStorageValue = value;
-    if (Array.isArray(value)) {
-      localStorageValue = value.map(item => typeof item === 'object' && item !== null ? { ...item, synced: true } : item);
+    let localStorageValue = cleanValue;
+    if (Array.isArray(cleanValue)) {
+      localStorageValue = cleanValue.map(item => typeof item === 'object' && item !== null ? { ...item, synced: true } : item);
     }
     localStorage.setItem(`starry_local_${key}`, JSON.stringify(localStorageValue));
   } catch (err) {
@@ -746,6 +863,18 @@ export async function uploadBase64ToStorage(base64: string): Promise<string> {
   }
 }
 
+async function registerCustomCategory(moduleName: string, categoryName: string | undefined): Promise<void> {
+  if (!categoryName) return;
+  const name = categoryName.trim();
+  if (!name) return;
+  const list = await getDbKey("custom_categories") || [];
+  const exists = list.some((item: any) => item.module === moduleName && item.category.trim().toLowerCase() === name.toLowerCase());
+  if (!exists) {
+    list.push({ module: moduleName, category: name });
+    await setDbKey("custom_categories", list);
+  }
+}
+
 // Mock Fetch Router implementation to route all API requests straight to Supabase state rows!
 export async function handleSupabaseApiCall(url: string, init?: RequestInit): Promise<Response> {
   const urlObj = new URL(url, window.location.origin);
@@ -782,6 +911,23 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       }
       return null;
     })();
+
+    // GET /api/custom_categories
+    if (pathParts[0] === "custom_categories" && method === "GET") {
+      const list = await getDbKey("custom_categories") || [];
+      return jsonResponse(list);
+    }
+
+    // POST /api/custom_categories
+    if (pathParts[0] === "custom_categories" && method === "POST") {
+      const { module, category } = body || {};
+      if (!module || !category) {
+        return jsonResponse({ error: "module and category are required" }, 400);
+      }
+      await registerCustomCategory(module, category);
+      const list = await getDbKey("custom_categories") || [];
+      return jsonResponse({ success: true, list });
+    }
 
     // --- SOCIAL & COMMUNITY EXTENDED API ENDPOINTS ---
 
@@ -1922,6 +2068,10 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         return jsonResponse({ error: "Payload is required" }, 400);
       }
       
+      if (payload.category) {
+        await registerCustomCategory(type, payload.category);
+      }
+      
       const userId = payload.user_id || "anonymous";
       let earnedCoins = 0;
       let coinMessage = "";
@@ -2052,7 +2202,8 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           author_name: payload.is_anonymous ? "Anonymous Star" : (payload.author_name || payload.username || "Stardust"),
           content: payload.content || "",
           is_anonymous: Boolean(payload.is_anonymous),
-          color_theme: payload.color_theme || "pink"
+          color_theme: payload.color_theme || "pink",
+          category: payload.category || "General"
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
@@ -2067,7 +2218,8 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           title: payload.title || "Untitled Artwork",
           image_url: imgUrl,
           external_link: payload.external_link || "",
-          description: payload.description || ""
+          description: payload.description || "",
+          category: payload.category || "General"
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
@@ -2099,7 +2251,8 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           artist: payload.artist || "Unknown Artist",
           audio_url: audioUrl,
           cover_url: coverUrl,
-          duration: payload.duration || "3:30"
+          duration: payload.duration || "3:30",
+          category: payload.category || "General"
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);
@@ -2120,7 +2273,8 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           ...basePost,
           title,
           content,
-          is_anonymous: Boolean(payload.is_anonymous)
+          is_anonymous: Boolean(payload.is_anonymous),
+          category: payload.category || "General"
         };
         collection.push(post);
         await setDbKey(`posts_${type}`, collection);

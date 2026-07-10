@@ -31,6 +31,9 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
   const [submitError, setSubmitError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
   const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -78,19 +81,29 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
     Fanart: "同人同好繪"
   };
 
-  const categories = ["All", "Concert", "Sports Meet", "External Schedule", "Behind the Scenes", "General"];
+  const categories = ["All", "Concert", "Sports Meet", "External Schedule", "Behind the Scenes", "General", ...customCategories];
   const years = ["All", "2026", "2025", "2024"];
 
   const fetchPhotos = async () => {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/posts/photos");
+      const [res, catRes] = await Promise.all([
+        fetch("/api/posts/photos"),
+        fetch("/api/custom_categories")
+      ]);
       if (res.ok) {
         const data = await res.json();
         setPhotos(data);
       } else {
         setError("無法載入相片庫，請稍後重試。");
+      }
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const filtered = catData
+          .filter((item: any) => item.module === "photos")
+          .map((item: any) => item.category);
+        setCustomCategories(filtered);
       }
     } catch (err) {
       setError("無法連線至伺服器。");
@@ -134,11 +147,12 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
     }
 
     try {
+      const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
         title,
         image_url: imageUrl,
         year,
-        category,
+        category: finalCategory,
         user_id: currentUser?.id || "anonymous",
         username: currentUser?.username || "Anonymous Visitor",
         role: currentUser?.role || "user"
@@ -156,6 +170,8 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
         setTitle("");
         setImageUrl("");
         setSelectedFileName("");
+        setIsCustomCategory(false);
+        setCustomCategory("");
         if (currentUser?.role === "admin") {
           fetchPhotos();
         }
@@ -507,8 +523,16 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
                     <div>
                       <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">相片類別</label>
                       <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
+                        value={isCustomCategory ? "Custom" : category}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "Custom") {
+                            setIsCustomCategory(true);
+                          } else {
+                            setIsCustomCategory(false);
+                            setCategory(val);
+                          }
+                        }}
                         className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
                       >
                         <option value="Concert" className="text-[#6E4B55]">演唱會舞台</option>
@@ -516,9 +540,32 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
                         <option value="External Schedule" className="text-[#6E4B55]">外務</option>
                         <option value="Behind the Scenes" className="text-[#6E4B55]">幕後花絮</option>
                         <option value="General" className="text-[#6E4B55]">日常應援</option>
+                        {customCategories.map((c) => (
+                          <option key={c} value={c} className="text-[#6E4B55]">{c}</option>
+                        ))}
+                        <option value="Custom" className="text-[#6E4B55]">✨ 自定義應援類別 (Custom)</option>
                       </select>
                     </div>
                   </div>
+
+                  {isCustomCategory && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-1.5"
+                    >
+                      <label className="block text-[11px] font-mono text-[#6E4B55]/70">請輸入自定義應援類別名稱</label>
+                      <input
+                        type="text"
+                        required
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                        placeholder="例如：機場直拍、經典相冊、FM花絮..."
+                        className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-xs px-3.5 py-2.5 rounded-xl transition-all"
+                      />
+                    </motion.div>
+                  )}
 
                   <div className="flex gap-3 pt-4">
                     <button

@@ -28,6 +28,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
   const [submitError, setSubmitError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
   const [isReadingFile, setIsReadingFile] = useState(false);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -59,7 +60,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
     reader.readAsDataURL(file);
   };
 
-  const categories = ["All", "Stage", "Vlog", "Teaser", "General", ...Array.from(new Set<string>(videos.map(v => v.category as string))).filter((c): c is string => !!c && !["Stage", "Vlog", "Teaser", "General"].includes(c))];
+  const categories = ["All", "Stage", "Vlog", "Teaser", "General", ...Array.from(new Set<string>([...customCategories, ...videos.map(v => v.category as string)])).filter((c): c is string => !!c && !["Stage", "Vlog", "Teaser", "General"].includes(c))];
   const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
   const [isPlayerPlaying, setIsPlayerPlaying] = useState(false);
 
@@ -67,7 +68,10 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/posts/videos");
+      const [res, catRes] = await Promise.all([
+        fetch("/api/posts/videos"),
+        fetch("/api/custom_categories")
+      ]);
       if (res.ok) {
         const data = await res.json();
         setVideos(data);
@@ -76,6 +80,13 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
         }
       } else {
         setError("無法載入影片區，請稍後重試。");
+      }
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const filtered = catData
+          .filter((item: any) => item.module === "videos")
+          .map((item: any) => item.category);
+        setCustomCategories(filtered);
       }
     } catch (err) {
       setError("連線伺服器失敗。");
@@ -434,6 +445,9 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                         <option value="Vlog">應援Vlog (Vlog)</option>
                         <option value="Teaser">官方預告 (Teaser)</option>
                         <option value="General">日常合輯 (General)</option>
+                        {customCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
                         <option value="Custom">✨ 自定義應援類別 (Custom)</option>
                       </select>
                     </div>

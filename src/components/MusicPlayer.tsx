@@ -242,6 +242,19 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  // Custom Category States
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [category, setCategory] = useState("General");
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+
+  const musicCategories = ["All", "General", ...customCategories];
+  const filteredTracks = tracks.filter((t) => {
+    if (selectedCategory === "All") return true;
+    return t.category === selectedCategory;
+  });
+
   // Save Player Styles to localStorage
   useEffect(() => {
     localStorage.setItem("starry_player_theme", themeColor);
@@ -268,7 +281,11 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
       setIsLoading(true);
     }
     try {
-      const res = await fetch("/api/posts/music");
+      const [res, catRes] = await Promise.all([
+        fetch("/api/posts/music"),
+        fetch("/api/custom_categories")
+      ]);
+      
       if (res.ok) {
         const data = await res.json();
         setTracks(data);
@@ -285,6 +302,14 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
             setIframeUrl(parseEmbedUrl(audioUrl));
           }
         }
+      }
+
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const filtered = catData
+          .filter((item: any) => item.module === "music")
+          .map((item: any) => item.category);
+        setCustomCategories(filtered);
       }
     } catch (err) {
       console.error("Error fetching tracks", err);
@@ -521,12 +546,14 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     }
 
     try {
+      const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
         title,
         artist: newArtist.trim(),
         audio_url: trimmedUrl,
         cover_url: newCoverUrl || "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500",
         duration: "3:30",
+        category: finalCategory,
         user_id: currentUser?.id || "anonymous",
         username: currentUser?.username || "Anonymous Visitor",
         role: currentUser?.role || "user",
@@ -546,6 +573,8 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
         setNewArtist("");
         setNewAudioUrl("");
         setNewCoverUrl("");
+        setIsCustomCategory(false);
+        setCustomCategory("");
         
         // Instantly refresh list so they can see and play it immediately
         fetchTracks();
@@ -1030,41 +1059,62 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
               </button>
             </div>
 
+            {/* Category selection row */}
+            <div className="flex flex-wrap gap-1.5 pb-2">
+              {musicCategories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1 rounded-full text-[10px] transition-all ${
+                    selectedCategory === cat
+                      ? "bg-white text-[#6E4B55] shadow-sm font-semibold border border-transparent"
+                      : "bg-white/20 hover:bg-white/40 text-white border border-white/10"
+                  }`}
+                >
+                  {cat === "All" ? "全部" : cat === "General" ? "一般" : cat}
+                </button>
+              ))}
+            </div>
+
             <div className="max-h-40 overflow-y-auto space-y-1.5 pr-2 scrollbar-thin">
               {isLoading ? (
                 <div className="text-center py-6 text-xs font-mono opacity-50">正在為您載入音樂星庫中...</div>
-              ) : tracks.length === 0 ? (
-                <div className="text-center py-6 text-xs font-serif opacity-50">{"目前還沒有人投稿過音樂 ＞＜ 快來當第一個吧！"}</div>
+              ) : filteredTracks.length === 0 ? (
+                <div className="text-center py-6 text-xs font-serif opacity-50">{"此類別目前尚未有投稿的音樂 ＞＜"}</div>
               ) : (
-                tracks.map((track, idx) => (
-                  <div
-                    key={track.id}
-                    onClick={() => selectTrack(idx)}
-                    className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${currentIdx === idx ? `bg-white/90 shadow-sm ${currentTheme.border} font-semibold` : "hover:bg-white/30 border-transparent opacity-85"}`}
-                    style={{ color: currentIdx === idx ? currentTheme.accent : undefined }}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-8 w-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border bg-white/40 border-gray-200/40">
-                        {track.cover_url ? (
-                          <img src={track.cover_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <Music className="h-4 w-4" style={{ color: currentTheme.accent }} />
-                        )}
+                filteredTracks.map((track) => {
+                  const originalIdx = tracks.findIndex(t => t.id === track.id);
+                  const isCurrent = currentIdx === originalIdx;
+                  return (
+                    <div
+                      key={track.id}
+                      onClick={() => selectTrack(originalIdx)}
+                      className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer border ${isCurrent ? `bg-white/90 shadow-sm ${currentTheme.border} font-semibold` : "hover:bg-white/30 border-transparent opacity-85"}`}
+                      style={{ color: isCurrent ? currentTheme.accent : undefined }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-8 w-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border bg-white/40 border-gray-200/40">
+                          {track.cover_url ? (
+                            <img src={track.cover_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <Music className="h-4 w-4" style={{ color: currentTheme.accent }} />
+                          )}
+                        </div>
+                        <div className="text-left text-xs min-w-0">
+                          <p className="font-semibold truncate max-w-[160px] md:max-w-[200px]">{track.title}</p>
+                          <p className="opacity-75 truncate max-w-[120px]">{track.artist}</p>
+                        </div>
                       </div>
-                      <div className="text-left text-xs min-w-0">
-                        <p className="font-semibold truncate max-w-[160px] md:max-w-[200px]">{track.title}</p>
-                        <p className="opacity-75 truncate max-w-[120px]">{track.artist}</p>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono opacity-50 px-1.5 py-0.5 rounded bg-gray-200/40">
+                          {(track.audio_url || "").includes("bilibili") ? "Bilibili" : "QQ"}
+                        </span>
+                        <span className="text-xs font-mono opacity-50">{track.duration}</span>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono opacity-50 px-1.5 py-0.5 rounded bg-gray-200/40">
-                        {(track.audio_url || "").includes("bilibili") ? "Bilibili" : "QQ"}
-                      </span>
-                      <span className="text-xs font-mono opacity-50">{track.duration}</span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -1150,6 +1200,50 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                       onChange={(e) => setNewArtist(e.target.value)}
                       className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
                     />
+                  </div>
+
+                  {/* Category Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#6E4B55]/70 mb-1.5">音樂分類 (Category) *</label>
+                      <select
+                        value={isCustomCategory ? "Custom" : category}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "Custom") {
+                            setIsCustomCategory(true);
+                          } else {
+                            setIsCustomCategory(false);
+                            setCategory(val);
+                          }
+                        }}
+                        className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
+                      >
+                        <option value="General">一般音樂</option>
+                        {customCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="Custom">✨ 自定義音樂類別 (Custom)</option>
+                      </select>
+                    </div>
+
+                    {isCustomCategory && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="space-y-1.5"
+                      >
+                        <label className="block text-xs font-semibold text-[#6E4B55]/70">請輸入自定義音樂類別名稱</label>
+                        <input
+                          type="text"
+                          required
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          placeholder="例如：原創同人曲、應援合唱..."
+                          className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-xs px-3.5 py-2.5 rounded-xl transition-all"
+                        />
+                      </motion.div>
+                    )}
                   </div>
 
                   <div>

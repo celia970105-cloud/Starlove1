@@ -48,22 +48,16 @@ export default function SocialInteractiveBlock({
   const checkUserInteractions = async () => {
     if (!currentUser) return;
     try {
-      // We can fetch from feed latest/hot or a dedicated interaction checker.
-      // Alternatively, we query the feed list to see if liked_by_me and favorited_by_me are true,
-      // or we can fetch directly from user's likes/favorites store if available.
-      // Let's do a fast verification using the user's favorites endpoint:
-      const favoritesRes = await fetch(`/api/social/favorites/${currentUser.id}`);
-      if (favoritesRes.ok) {
-        const favs = await favoritesRes.json();
-        const found = favs.some((f: any) => f.id === postId);
-        setIsFavorited(found);
+      const res = await fetch(`/api/social/status/${postId}/${currentUser.id}`);
+      if (res.ok) {
+        const status = await res.json();
+        setIsLiked(status.liked);
+        setIsFavorited(status.favorited);
+        setLikesCount(status.likes_count);
+        setFavoritesCount(status.favorites_count);
       }
-      
-      // For likes, let's fetch the post detail or rely on client-side cache fallback
-      const cachedLike = localStorage.getItem(`starry_like_${postId}_${currentUser.id}`);
-      setIsLiked(cachedLike === "true");
     } catch (e) {
-      console.error(e);
+      console.error("Failed to check user interactions:", e);
     }
   };
 
@@ -102,8 +96,11 @@ export default function SocialInteractiveBlock({
       if (res.ok) {
         const data = await res.json();
         setIsLiked(data.liked);
-        setLikesCount(prev => data.liked ? prev + 1 : Math.max(0, prev - 1));
-        localStorage.setItem(`starry_like_${postId}_${currentUser.id}`, data.liked ? "true" : "false");
+        if (data.likes_count !== undefined) {
+          setLikesCount(data.likes_count);
+        } else {
+          setLikesCount(prev => data.liked ? prev + 1 : Math.max(0, prev - 1));
+        }
         if (onUpdateCounts) onUpdateCounts();
       }
     } catch (err) {
@@ -131,7 +128,11 @@ export default function SocialInteractiveBlock({
       if (res.ok) {
         const data = await res.json();
         setIsFavorited(data.favorited);
-        setFavoritesCount(prev => data.favorited ? prev + 1 : Math.max(0, prev - 1));
+        if (data.favorites_count !== undefined) {
+          setFavoritesCount(data.favorites_count);
+        } else {
+          setFavoritesCount(prev => data.favorited ? prev + 1 : Math.max(0, prev - 1));
+        }
         if (onUpdateCounts) onUpdateCounts();
       }
     } catch (err) {

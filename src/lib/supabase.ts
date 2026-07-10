@@ -871,6 +871,43 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       return jsonResponse(enhanced);
     }
 
+    // GET /api/social/status/:postId/:userId
+    if (pathParts[0] === "social" && pathParts[1] === "status" && method === "GET") {
+      const postId = pathParts[2];
+      const userId = pathParts[3];
+      if (!postId || !userId) {
+        return jsonResponse({ error: "Missing parameter" }, 400);
+      }
+
+      let liked = false;
+      let favorited = false;
+      let likes_count = 0;
+      let favorites_count = 0;
+
+      if (supabase) {
+        const [likesRes, favsRes, myLike, myFav] = await Promise.all([
+          supabase.from("post_likes").select("id", { count: "exact" }).eq("post_id", postId),
+          supabase.from("favorites").select("id", { count: "exact" }).eq("post_id", postId),
+          supabase.from("post_likes").select("id").eq("post_id", postId).eq("user_id", userId).maybeSingle(),
+          supabase.from("favorites").select("id").eq("post_id", postId).eq("user_id", userId).maybeSingle()
+        ]);
+        
+        likes_count = likesRes.count || 0;
+        favorites_count = favsRes.count || 0;
+        liked = !!myLike.data;
+        favorited = !!myFav.data;
+      } else {
+        const localLikes = JSON.parse(localStorage.getItem(`starry_local_likes_${postId}`) || "[]");
+        const localFavs = JSON.parse(localStorage.getItem(`starry_local_favs_${postId}`) || "[]");
+        likes_count = localLikes.length;
+        favorites_count = localFavs.length;
+        liked = localLikes.includes(userId);
+        favorited = localFavs.includes(userId);
+      }
+
+      return jsonResponse({ liked, favorited, likes_count, favorites_count });
+    }
+
     // POST /api/social/like
     if (pathParts[0] === "social" && pathParts[1] === "like" && method === "POST") {
       const { postId } = body || {};
@@ -1206,7 +1243,23 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
           return jsonResponse({ error: "Forbidden" }, 403);
         }
       } else {
-        return jsonResponse({ success: true });
+        // Find and delete the comment from local storage arrays
+        let found = false;
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("starry_local_comments_")) {
+            try {
+              const comments = JSON.parse(localStorage.getItem(key) || "[]");
+              const filtered = comments.filter((c: any) => c.id !== commentId);
+              if (filtered.length !== comments.length) {
+                localStorage.setItem(key, JSON.stringify(filtered));
+                found = true;
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+        return jsonResponse({ success: true, found });
       }
     }
 
@@ -1309,7 +1362,35 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
         return jsonResponse(enhancedPosts);
       } else {
-        return jsonResponse([]);
+        const pTypes = ["photos", "videos", "letters", "artworks", "music", "candies"];
+        const favoritesList = [];
+        for (const pt of pTypes) {
+          try {
+            const list = await getDbKey(`posts_${pt}`);
+            for (const p of list) {
+              const localFavs = JSON.parse(localStorage.getItem(`starry_local_favs_${p.id}`) || "[]");
+              if (localFavs.includes(userId)) {
+                favoritesList.push(p);
+              }
+            }
+          } catch (e) {}
+        }
+        
+        const enhancedPosts = await Promise.all(favoritesList.map(async (p: any) => {
+          const localLikes = JSON.parse(localStorage.getItem(`starry_local_likes_${p.id}`) || "[]");
+          const localFavs = JSON.parse(localStorage.getItem(`starry_local_favs_${p.id}`) || "[]");
+          const localComments = JSON.parse(localStorage.getItem(`starry_local_comments_${p.id}`) || "[]");
+          return {
+            ...p,
+            likes_count: localLikes.length,
+            favorites_count: localFavs.length,
+            comments_count: localComments.length,
+            liked_by_me: localLikes.includes(userId),
+            favorited_by_me: localFavs.includes(userId)
+          };
+        }));
+        
+        return jsonResponse(enhancedPosts);
       }
     }
 
@@ -1790,7 +1871,56 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       const type = pathParts[1];
       const collection = await getDbKey(`posts_${type}`);
       const approvedItems = collection.filter((item: any) => item.status === "approved");
-      return jsonResponse(approvedItems);
+      
+      const enhanced = await Promise.all(approvedItems.map(async (p: any) => {
+        let likesCount = 0;
+        let favsCount = 0;
+        let commentsCount = 0;
+        let liked_by_me = false;
+        let favorited_by_me = false;
+
+        if (supabase) {
+          const [likesRes, favsRes, commentsRes] = await Promise.all([
+            supabase.from("post_likes").select("id", { count: "exact" }).eq("post_id", p.id),
+            supabase.from("favorites").select("id", { count: "exact" }).eq("post_id", p.id),
+            supabase.from("comments").select("id", { count: "exact" }).eq("post_id", p.id)
+          ]);
+          likesCount = likesRes.count || 0;
+          favsCount = favsRes.count || 0;
+          commentsCount = commentsRes.count || 0;
+
+          if (currentUserId) {
+            const [myLike, myFav] = await Promise.all([
+              supabase.from("post_likes").select("id").eq("post_id", p.id).eq("user_id", currentUserId).maybeSingle(),
+              supabase.from("favorites").select("id").eq("post_id", p.id).eq("user_id", currentUserId).maybeSingle()
+            ]);
+            liked_by_me = !!myLike.data;
+            favorited_by_me = !!myFav.data;
+          }
+        } else {
+          const localLikes = JSON.parse(localStorage.getItem(`starry_local_likes_${p.id}`) || "[]");
+          const localFavs = JSON.parse(localStorage.getItem(`starry_local_favs_${p.id}`) || "[]");
+          const localComments = JSON.parse(localStorage.getItem(`starry_local_comments_${p.id}`) || "[]");
+          likesCount = localLikes.length;
+          favsCount = localFavs.length;
+          commentsCount = localComments.length;
+          if (currentUserId) {
+            liked_by_me = localLikes.includes(currentUserId);
+            favorited_by_me = localFavs.includes(currentUserId);
+          }
+        }
+
+        return {
+          ...p,
+          likes_count: likesCount,
+          favorites_count: favsCount,
+          comments_count: commentsCount,
+          liked_by_me,
+          favorited_by_me
+        };
+      }));
+      
+      return jsonResponse(enhanced);
     }
 
     // 11. POST /api/posts/:type

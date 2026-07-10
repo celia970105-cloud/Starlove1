@@ -45,6 +45,14 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
 
   useEffect(() => {
     fetchArtworks();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedArtwork(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [globalRefreshCount]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,6 +195,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
                 <img
                   src={art.image_url}
                   alt={art.title}
+                  loading="lazy"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   referrerPolicy="no-referrer"
                 />
@@ -236,12 +245,16 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
       {/* Art Zoom Overlay */}
       <AnimatePresence>
         {selectedArtwork && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div
+            onClick={() => setSelectedArtwork(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md cursor-zoom-out"
+          >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative max-w-4xl w-full bg-white/95 text-[#6E4B55] border border-[#FF799C]/25 rounded-3xl overflow-hidden shadow-2xl p-4"
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl w-full bg-white/95 text-[#6E4B55] border border-[#FF799C]/25 rounded-3xl overflow-hidden shadow-2xl p-4 cursor-default"
             >
               <button
                 onClick={() => setSelectedArtwork(null)}

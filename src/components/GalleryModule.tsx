@@ -101,6 +101,14 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
 
   useEffect(() => {
     fetchPhotos();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedPhoto(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [globalRefreshCount]);
 
   // Filter photos
@@ -258,24 +266,25 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
           <p className="text-[#6E4B55]/50 text-xs mt-1">快來遞交你的第一張珍藏應援吧！</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="columns-1 sm:columns-2 md:columns-3 gap-6 space-y-6 [column-fill:_balance] box-border">
           {filteredPhotos.map((photo) => (
             <motion.div
               layout
               key={photo.id}
-              className="group relative overflow-hidden h-72 rounded-2xl border border-[#FF799C]/15 bg-white/40 cursor-pointer shadow-sm hover:shadow-md hover:border-[#FF799C]/40 transition-all duration-300"
+              className="break-inside-avoid mb-6 block group relative overflow-hidden rounded-2xl border border-[#FF799C]/15 bg-white/40 cursor-pointer shadow-sm hover:shadow-md hover:border-[#FF799C]/40 transition-all duration-300"
               onClick={() => setSelectedPhoto(photo)}
             >
               {/* Image */}
               <img
                 src={photo.image_url}
                 alt={photo.title}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+                className="w-full h-auto max-h-[420px] object-cover transition-transform duration-500 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
 
               {/* Shading overlay (cute light pink glow at bottom) */}
-              <div className="absolute inset-0 bg-gradient-to-t from-white via-white/30 to-transparent opacity-90 group-hover:opacity-100 transition-all" />
+              <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-transparent opacity-90 group-hover:opacity-100 transition-all" />
 
               {/* Glass Info panel at bottom */}
               <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-1 group-hover:translate-y-0 transition-transform">
@@ -306,12 +315,16 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
       {/* Lightbox Modal */}
       <AnimatePresence>
         {selectedPhoto && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div
+            onClick={() => setSelectedPhoto(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md cursor-zoom-out"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative max-w-4xl w-full bg-white/95 text-[#6E4B55] border border-[#FF799C]/25 rounded-3xl overflow-hidden p-3 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl w-full bg-white/95 text-[#6E4B55] border border-[#FF799C]/25 rounded-3xl overflow-hidden p-3 shadow-2xl cursor-default"
             >
               {/* Close Button */}
               <button

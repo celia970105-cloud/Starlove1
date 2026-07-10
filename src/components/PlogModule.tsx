@@ -1245,120 +1245,107 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
               );
             })}
 
-            {/* Inline floating controller */}
-            {selectedElement && !isDragging && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                style={{
-                  left: `${Math.max(130, Math.min(320, selectedElement.x))}px`,
-                  top: `${selectedElement.y > 225 ? Math.max(90, selectedElement.y - 145) : Math.min(360, selectedElement.y + 115)}px`,
-                  position: "absolute",
-                  zIndex: 50,
-                }}
-                className="absolute transform -translate-x-1/2 w-[260px] bg-white/95 backdrop-blur-md border-2 border-[#FF799C] shadow-2xl rounded-2xl p-3 select-none pointer-events-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header with action icons */}
-                <div className="flex justify-between items-center border-b border-[#FF799C]/20 pb-1.5 mb-2">
-                  <span className="text-[10px] font-black text-[#FF799C] flex items-center gap-1">
-                    <span>✨</span> 實時屬性調整
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); sendToFront(); }}
-                      className="p-1 hover:bg-pink-100 rounded text-[#FF799C] transition-all cursor-pointer"
-                      title="置於最上層"
-                    >
-                      <ArrowUp className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); sendToBack(); }}
-                      className="p-1 hover:bg-pink-100 rounded text-[#FF799C] transition-all cursor-pointer"
-                      title="置於最下層"
-                    >
-                      <ArrowDown className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteSelectedElement(); }}
-                      className="p-1 hover:bg-red-50 rounded text-red-500 transition-all cursor-pointer"
-                      title="刪除"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sizing & rotation sliders */}
-                <div className="space-y-2">
-                  {/* Sizing Slider */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] text-[#6E4B55] font-bold shrink-0 flex items-center gap-0.5 w-18">
-                      <Maximize2 className="h-3 w-3 text-[#FF799C]" /> 縮放 {selectedElement.scale.toFixed(1)}x
-                    </span>
-                    <input
-                      type="range"
-                      min={0.2}
-                      max={3.0}
-                      step={0.1}
-                      value={selectedElement.scale}
-                      onChange={(e) => updateSelectedElement("scale", parseFloat(e.target.value))}
-                      className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Rotation Slider */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] text-[#6E4B55] font-bold shrink-0 flex items-center gap-0.5 w-18">
-                      <RotateCcw className="h-3 w-3 text-[#FF799C]" /> 旋轉 {selectedElement.rotation}°
-                    </span>
-                    <input
-                      type="range"
-                      min={-180}
-                      max={180}
-                      step={5}
-                      value={selectedElement.rotation}
-                      onChange={(e) => updateSelectedElement("rotation", parseInt(e.target.value))}
-                      className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Color adjustment if text element */}
-                  {selectedElement.type === "text" && (
-                    <div className="pt-1.5 border-t border-[#FF799C]/10 mt-1">
-                      <span className="text-[9px] text-[#6E4B55] font-bold block mb-1">調整文字顏色：</span>
-                      <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-none">
-                        {TEXT_COLORS.map((color) => (
-                          <button
-                            key={color.code}
-                            onClick={() => updateSelectedElement("color", color.code)}
-                            className={`w-4 h-4 rounded-full border transition-all active:scale-90 cursor-pointer flex items-center justify-center shrink-0 ${
-                              selectedElement.color === color.code ? "ring-1 ring-[#FF799C] border-white scale-110" : "border-gray-200"
-                            }`}
-                            style={{ backgroundColor: color.code }}
-                            title={color.name}
-                          >
-                            {selectedElement.color === color.code && (
-                              <Check className={`h-2.5 w-2.5 ${color.code === "#FFFFFF" ? "text-black" : "text-white"}`} />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Empty Watermark placeholder */}
-            {elements.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-[#6E4B55]/30 pointer-events-none">
-                <span className="text-4xl mb-2">📸</span>
-                <p className="text-xs font-bold font-serif">這裡還是空白星空板喔</p>
-                <p className="text-[9px] mt-1">從右側選單點擊新增：相片、可愛貼紙或心願文字</p>
-              </div>
-            )}
+            {/* Inline floating controller has been moved OUTSIDE the canvas below to completely prevent any occlusion/overlap! */}
           </div>
+
+          {/* Dedicated attribute controller panel - placed OUTSIDE the canvas box to avoid any occlusion! */}
+          {selectedElement && !isDragging && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="w-full max-w-[450px] bg-white border-2 border-[#FF799C] shadow-lg rounded-2xl p-4 mt-4 select-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with action icons */}
+              <div className="flex justify-between items-center border-b border-[#FF799C]/20 pb-2 mb-3">
+                <span className="text-xs font-black text-[#FF799C] flex items-center gap-1.5">
+                  <span>✨</span> 實時屬性調整
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); sendToFront(); }}
+                    className="p-1.5 bg-pink-50 hover:bg-pink-100 rounded-lg text-[#FF799C] transition-all cursor-pointer"
+                    title="置於最上層"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); sendToBack(); }}
+                    className="p-1.5 bg-pink-50 hover:bg-pink-100 rounded-lg text-[#FF799C] transition-all cursor-pointer"
+                    title="置於最下層"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSelectedElement(); }}
+                    className="p-1.5 bg-red-50 hover:bg-red-100 rounded-lg text-red-500 transition-all cursor-pointer"
+                    title="刪除"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Sizing & rotation sliders */}
+              <div className="space-y-3">
+                {/* Sizing Slider */}
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-xs text-[#6E4B55] font-bold shrink-0 flex items-center gap-1 w-24">
+                    <Maximize2 className="h-4 w-4 text-[#FF799C]" /> 縮放 {selectedElement.scale.toFixed(1)}x
+                  </span>
+                  <input
+                    type="range"
+                    min={0.2}
+                    max={3.0}
+                    step={0.1}
+                    value={selectedElement.scale}
+                    onChange={(e) => updateSelectedElement("scale", parseFloat(e.target.value))}
+                    className="w-full accent-[#FF799C] h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+
+                {/* Rotation Slider */}
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-xs text-[#6E4B55] font-bold shrink-0 flex items-center gap-1 w-24">
+                    <RotateCcw className="h-4 w-4 text-[#FF799C]" /> 旋轉 {selectedElement.rotation}°
+                  </span>
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={5}
+                    value={selectedElement.rotation}
+                    onChange={(e) => updateSelectedElement("rotation", parseInt(e.target.value))}
+                    className="w-full accent-[#FF799C] h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+
+                {/* Color adjustment if text element */}
+                {selectedElement.type === "text" && (
+                  <div className="pt-2 border-t border-[#FF799C]/10 mt-2">
+                    <span className="text-xs text-[#6E4B55] font-bold block mb-1.5">調整文字顏色：</span>
+                    <div className="flex gap-2 overflow-x-auto py-1 scrollbar-none">
+                      {TEXT_COLORS.map((color) => (
+                        <button
+                          key={color.code}
+                          onClick={() => updateSelectedElement("color", color.code)}
+                          className={`w-5 h-5 rounded-full border transition-all active:scale-90 cursor-pointer flex items-center justify-center shrink-0 ${
+                            selectedElement.color === color.code ? "ring-2 ring-[#FF799C] border-white scale-110" : "border-gray-200"
+                          }`}
+                          style={{ backgroundColor: color.code }}
+                          title={color.name}
+                        >
+                          {selectedElement.color === color.code && (
+                            <Check className={`h-3 w-3 ${color.code === "#FFFFFF" ? "text-black" : "text-white"}`} />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
 
           {/* Export Action Button Trigger */}
           <button
@@ -1918,61 +1905,60 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
                 );
               })}
 
-              {/* Inline floating controller */}
-              {selectedElement && !isDragging && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  style={{
-                    left: `${Math.max(130, Math.min(320, selectedElement.x))}px`,
-                    top: `${selectedElement.y > 225 ? Math.max(90, selectedElement.y - 145) : Math.min(360, selectedElement.y + 115)}px`,
-                    position: "absolute",
-                    zIndex: 40,
-                  }}
-                  className="bg-white/95 border border-[#FF799C]/25 px-3 py-2 rounded-2xl shadow-xl flex flex-col gap-1.5 select-none text-left min-w-[140px]"
-                >
-                  <div className="flex justify-between items-center gap-2 border-b border-gray-100 pb-1">
-                    <span className="text-[8px] font-black text-[#6E4B55]">編輯屬性</span>
-                    <button
-                      onClick={deleteSelectedElement}
-                      className="text-[7.5px] text-red-500 font-bold hover:underline"
-                    >
-                      刪除
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] text-[#6E4B55] font-bold shrink-0 flex items-center gap-0.5 w-18">
-                        <Maximize2 className="h-3 w-3 text-[#FF799C]" /> 縮放 {selectedElement.scale.toFixed(1)}x
-                      </span>
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={3.0}
-                        step={0.1}
-                        value={selectedElement.scale}
-                        onChange={(e) => updateSelectedElement("scale", parseFloat(e.target.value))}
-                        className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] text-[#6E4B55] font-bold shrink-0 flex items-center gap-0.5 w-18">
-                        <RotateCcw className="h-3 w-3 text-[#FF799C]" /> 旋轉 {selectedElement.rotation}°
-                      </span>
-                      <input
-                        type="range"
-                        min={-180}
-                        max={180}
-                        step={5}
-                        value={selectedElement.rotation}
-                        onChange={(e) => updateSelectedElement("rotation", parseInt(e.target.value))}
-                        className="w-full accent-[#FF799C] h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+              {/* Inline floating controller has been moved OUTSIDE the canvas below to completely prevent any occlusion/overlap! */}
             </div>
+
+            {/* Dedicated attribute controller panel - placed OUTSIDE the canvas box to avoid any occlusion! */}
+            {selectedElement && !isDragging && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="w-full max-w-[450px] bg-white border-2 border-[#FF799C] shadow-lg rounded-2xl p-4 mt-4 select-none text-left"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center gap-2 border-b border-gray-100 pb-2 mb-3">
+                  <span className="text-xs font-black text-[#6E4B55] flex items-center gap-1.5">
+                    <span>✨</span> 編輯物件屬性
+                  </span>
+                  <button
+                    onClick={deleteSelectedElement}
+                    className="px-2.5 py-1 text-xs text-red-500 font-bold hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                  >
+                    刪除物件
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-[#6E4B55] font-bold shrink-0 flex items-center gap-1 w-24">
+                      <Maximize2 className="h-4 w-4 text-[#FF799C]" /> 縮放 {selectedElement.scale.toFixed(1)}x
+                    </span>
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={3.0}
+                      step={0.1}
+                      value={selectedElement.scale}
+                      onChange={(e) => updateSelectedElement("scale", parseFloat(e.target.value))}
+                      className="w-full accent-[#FF799C] h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-[#6E4B55] font-bold shrink-0 flex items-center gap-1 w-24">
+                      <RotateCcw className="h-4 w-4 text-[#FF799C]" /> 旋轉 {selectedElement.rotation}°
+                    </span>
+                    <input
+                      type="range"
+                      min={-180}
+                      max={180}
+                      step={5}
+                      value={selectedElement.rotation}
+                      onChange={(e) => updateSelectedElement("rotation", parseInt(e.target.value))}
+                      className="w-full accent-[#FF799C] h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* Premium Signature Label */}
             <div className="mt-4 flex items-center gap-1.5 text-[10px] text-gray-400 font-mono">

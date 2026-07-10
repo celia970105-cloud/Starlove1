@@ -35,79 +35,8 @@ const SEED_DATA = {
   posts_videos: [] as any[],
   posts_letters: [] as any[],
   posts_artworks: [] as any[],
-  posts_music: [
-    {
-      id: "m_seed_1",
-      user_id: "anonymous",
-      username: "星軌應援組",
-      status: "approved",
-      title: "星河之下 (鋼琴唯美伴奏)",
-      artist: "星願鋼琴組",
-      audio_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      cover_url: "https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=500",
-      duration: "6:12",
-      role: "user",
-      created_at: new Date(Date.now() - 3600000 * 48).toISOString()
-    },
-    {
-      id: "m_seed_2",
-      user_id: "anonymous",
-      username: "極禹大糖推廣員",
-      status: "approved",
-      title: "《雙生》 (雙向奔赴舞台原聲)",
-      artist: "張極 & 張澤禹 (TF家族)",
-      audio_url: "https://www.bilibili.com/video/BV1pG411d7fF",
-      cover_url: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500",
-      duration: "3:30",
-      role: "user",
-      created_at: new Date(Date.now() - 3600000 * 24).toISOString()
-    },
-    {
-      id: "m_seed_3",
-      user_id: "anonymous",
-      username: "匿名的甜味星星",
-      status: "approved",
-      title: "《不完美小孩》 (純享感人合唱)",
-      artist: "張極 & 張澤禹 (TF家族)",
-      audio_url: "https://www.bilibili.com/video/BV1T54y1q7z8",
-      cover_url: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500",
-      duration: "3:45",
-      role: "user",
-      created_at: new Date(Date.now() - 3600000 * 12).toISOString()
-    }
-  ] as any[],
-  posts_candies: [
-    {
-      id: "c_seed_1",
-      user_id: "anonymous",
-      username: "極禹大糖推廣員",
-      status: "approved",
-      title: "櫻花蜜桃爆米花糖 🍿",
-      content: "張極在雙生舞台對視唱高音時，眼神裡滿滿全都是溫柔笑意，那一刻的雙向奔赴簡直甜到心坎，爆發出無數戀愛小泡泡！✨",
-      is_anonymous: false,
-      created_at: new Date(Date.now() - 3600000 * 24).toISOString()
-    },
-    {
-      id: "c_seed_2",
-      user_id: "anonymous",
-      username: "匿名的甜味星星",
-      status: "approved",
-      title: "草莓起泡薄荷糖 🍓",
-      content: "澤禹在後台直播吃水果時，張極二話不說一邊聊天一邊極其自然地遞紙巾。這種滲透到骨子底的日常細節小動作才是最致命最甜的糖點！🌸",
-      is_anonymous: true,
-      created_at: new Date(Date.now() - 3600000 * 12).toISOString()
-    },
-    {
-      id: "c_seed_3",
-      user_id: "anonymous",
-      username: "吉羽星宿守护者",
-      status: "approved",
-      title: "雙子星閃爍跳跳糖 🌌",
-      content: "兩人在運動會並肩奔跑、互相加油擊掌，最後擁抱的那一瞬間。少年人的默契和雙向守護是治癒一切的星光！💖",
-      is_anonymous: false,
-      created_at: new Date(Date.now() - 3600000 * 2).toISOString()
-    }
-  ] as any[],
+  posts_music: [] as any[],
+  posts_candies: [] as any[],
   pets: [] as any[],
   friendships: [] as any[],
   coparent_groups: [] as any[],
@@ -662,8 +591,20 @@ export async function initializeDatabase() {
   // Always ensure local storage is initialized with default seed data if empty,
   // so we have fallback backups and default system accounts (CeliaAdmin, Anonymous) ready
   for (const key of DB_KEYS) {
-    if (!localStorage.getItem(`starry_local_${key}`)) {
+    const localVal = localStorage.getItem(`starry_local_${key}`);
+    if (!localVal) {
       localStorage.setItem(`starry_local_${key}`, JSON.stringify((SEED_DATA as any)[key] || []));
+    } else {
+      // Clean up any remaining mock/seed entries so that empty areas start empty as requested
+      try {
+        const parsed = JSON.parse(localVal);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((item: any) => !(item && item.id && String(item.id).includes("_seed_")));
+          if (filtered.length !== parsed.length) {
+            localStorage.setItem(`starry_local_${key}`, JSON.stringify(filtered));
+          }
+        }
+      } catch (e) {}
     }
   }
 

@@ -105,13 +105,16 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
       const payload = {
         title: candyName,
         content: analysisContent,
-        is_anonymous: isAnonymous
+        is_anonymous: isAnonymous,
+        user_id: currentUser?.id || "anonymous",
+        username: currentUser?.username || "Anonymous",
+        role: currentUser?.role || "user"
       };
 
       const res = await fetch("/api/posts/candies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ payload })
       });
 
       if (res.ok) {

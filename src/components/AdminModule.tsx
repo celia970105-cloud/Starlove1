@@ -589,8 +589,21 @@ export default function AdminModule({
                           </div>
 
                           <h4 className="text-[#6E4B55] font-serif font-bold text-sm truncate leading-snug max-w-[280px] md:max-w-[450px]">
-                            {item.title || "無標題投稿"}
+                            {item._categoryKey === "music" ? `🎵 應援音樂: ${item.title}` : (item.title || "無標題投稿")}
                           </h4>
+
+                          {item._categoryKey === "music" && (
+                            <div className="text-xs text-[#6E4B55]/70 mt-1 space-y-1 bg-[#FFF6F2]/30 p-2.5 rounded-xl border border-[#FF799C]/5">
+                              <p><strong>演唱/製作人:</strong> {item.artist || "未提供"}</p>
+                              <p className="truncate"><strong>音樂連結:</strong> <a href={item.audio_url} target="_blank" rel="noreferrer" className="text-pink-500 underline hover:text-pink-600 font-mono text-[11px]">{item.audio_url}</a></p>
+                            </div>
+                          )}
+
+                          {item._categoryKey === "videos" && item.video_url && (
+                            <div className="text-xs text-[#6E4B55]/70 mt-1 space-y-1 bg-[#FFF6F2]/30 p-2.5 rounded-xl border border-[#FF799C]/5">
+                              <p className="truncate"><strong>影片網址:</strong> <a href={item.video_url} target="_blank" rel="noreferrer" className="text-pink-500 underline hover:text-pink-600 font-mono text-[11px]">{item.video_url}</a></p>
+                            </div>
+                          )}
 
                           {item.content && (
                             <p className="text-xs text-[#6E4B55]/70 mt-1 line-clamp-2 bg-[#FFF6F2]/30 p-2 rounded-xl border border-[#FF799C]/5">
@@ -1163,6 +1176,12 @@ export default function AdminModule({
                         {selectedItem.category || selectedItem.color_theme || "一般應援"}
                       </span>
                     </div>
+                    {selectedItem.artist && (
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-[#6E4B55]/60">歌手/製作:</span>
+                        <span className="font-serif font-bold text-[#FF799C] text-xs">{selectedItem.artist}</span>
+                      </div>
+                    )}
                     {selectedItem.video_url && (
                       <div className="flex justify-between items-center">
                         <span className="font-medium text-[#6E4B55]/60">影片網址:</span>

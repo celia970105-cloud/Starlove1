@@ -344,6 +344,14 @@ export default function App() {
     refreshCurrentUser();
   };
 
+  // Real-time passive background poller to fetch approved posts and updates automatically every 10 seconds
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      setGlobalRefreshCount((prev) => prev + 1);
+    }, 10000);
+    return () => clearInterval(syncInterval);
+  }, []);
+
   // Active User Tracking & Heartbeat Loop
   useEffect(() => {
     if (!currentUser) return;

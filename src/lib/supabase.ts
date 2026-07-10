@@ -640,6 +640,8 @@ export async function initializeDatabase() {
         console.log(`[Hourly Catch-up] Distributed ${rewardAmount} coins to all users.`);
       }
     }
+    // Pre-sync default and local users to ensure the profiles exist on Supabase for foreign key references
+    await getDbKey("users");
   } catch (err) {
     console.warn("Database initialization / catch-up failed:", err);
   }

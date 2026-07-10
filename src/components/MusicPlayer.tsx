@@ -223,12 +223,13 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
         
         // Setup initial source
         if (data.length > 0) {
-          const track = data[globalCurrentIdx];
-          const isDirect = track.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+          const track = data[globalCurrentIdx] || data[0];
+          const audioUrl = track?.audio_url || "";
+          const isDirect = audioUrl ? audioUrl.match(/\.(mp3|wav|ogg|m4a)/i) : null;
           if (isDirect && sharedAudio && !sharedAudio.src) {
-            sharedAudio.src = track.audio_url;
-          } else if (!isDirect && isPlaying) {
-            setIframeUrl(parseEmbedUrl(track.audio_url));
+            sharedAudio.src = audioUrl;
+          } else if (!isDirect && isPlaying && audioUrl) {
+            setIframeUrl(parseEmbedUrl(audioUrl));
           }
         }
       }
@@ -255,14 +256,14 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     if (!sharedAudio) return;
 
     const onTimeUpdate = () => {
-      const isDirect = currentTrack?.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+      const isDirect = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
       if (isDirect) {
         setCurrentTime(sharedAudio!.currentTime);
       }
     };
 
     const onDurationChange = () => {
-      const isDirect = currentTrack?.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+      const isDirect = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
       if (isDirect) {
         setDuration(sharedAudio!.duration || 180);
       }
@@ -301,7 +302,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   useEffect(() => {
     if (!isPlaying || !currentTrack) return;
     
-    const isDirectAudio = currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+    const isDirectAudio = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
     if (isDirectAudio) return; // Managed natively by HTML5 audio
 
     const interval = setInterval(() => {
@@ -329,14 +330,15 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     setCurrentTime(0);
     setDuration(210); // Standard simulated duration (3:30)
 
-    const isDirectAudio = track.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+    const audioUrl = track.audio_url || "";
+    const isDirectAudio = audioUrl ? audioUrl.match(/\.(mp3|wav|ogg|m4a)/i) : null;
     
     if (isDirectAudio) {
       if (sharedAudio) {
         setIframeUrl("");
-        const isSameSrc = sharedAudio.src === track.audio_url;
+        const isSameSrc = sharedAudio.src === audioUrl;
         if (!isSameSrc) {
-          sharedAudio.src = track.audio_url;
+          sharedAudio.src = audioUrl;
           sharedAudio.load();
         }
         if (autoPlay) {
@@ -350,7 +352,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
       if (sharedAudio) {
         sharedAudio.pause();
       }
-      const embed = parseEmbedUrl(track.audio_url);
+      const embed = parseEmbedUrl(audioUrl);
       if (autoPlay) {
         setIframeUrl(embed);
         setIsPlaying(true);
@@ -365,7 +367,8 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   const togglePlay = () => {
     if (tracks.length === 0 || !currentTrack) return;
     
-    const isDirectAudio = currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+    const audioUrl = currentTrack.audio_url || "";
+    const isDirectAudio = audioUrl ? audioUrl.match(/\.(mp3|wav|ogg|m4a)/i) : null;
 
     if (isPlaying) {
       if (isDirectAudio && sharedAudio) {
@@ -376,7 +379,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     } else {
       if (isDirectAudio && sharedAudio) {
         if (!sharedAudio.src) {
-          sharedAudio.src = currentTrack.audio_url;
+          sharedAudio.src = audioUrl;
           sharedAudio.load();
         }
         sharedAudio.play()
@@ -387,7 +390,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
           });
       } else {
         // Bilibili / QQ Music
-        const embed = parseEmbedUrl(currentTrack.audio_url);
+        const embed = parseEmbedUrl(audioUrl);
         setIframeUrl(embed);
         setIsPlaying(true);
       }
@@ -408,7 +411,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    const isDirectAudio = currentTrack?.audio_url.match(/\.(mp3|wav|ogg|m4a)/i);
+    const isDirectAudio = currentTrack?.audio_url ? currentTrack.audio_url.match(/\.(mp3|wav|ogg|m4a)/i) : null;
     if (isDirectAudio && sharedAudio) {
       sharedAudio.currentTime = val;
     }
@@ -851,7 +854,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                   className="inline-block px-3 py-1 rounded-full text-[10px] font-mono font-semibold border mb-3"
                   style={{ color: currentTheme.accent, borderColor: currentTheme.accent + "33", backgroundColor: currentTheme.accent + "0c" }}
                 >
-                  NOW PLAYING • {currentTrack.audio_url.includes("bilibili") ? "bilibili" : "QQ音樂"}
+                  NOW PLAYING • {(currentTrack.audio_url || "").includes("bilibili") ? "bilibili" : "QQ音樂"}
                 </span>
                 <h3 className="text-2xl font-serif font-semibold tracking-wide" style={{ color: currentTheme.accent }}>
                   {currentTrack.title}
@@ -976,7 +979,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                     
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-mono opacity-50 px-1.5 py-0.5 rounded bg-gray-200/40">
-                        {track.audio_url.includes("bilibili") ? "Bilibili" : "QQ"}
+                        {(track.audio_url || "").includes("bilibili") ? "Bilibili" : "QQ"}
                       </span>
                       <span className="text-xs font-mono opacity-50">{track.duration}</span>
                     </div>

@@ -749,7 +749,6 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
   const [expression, setExpression] = useState<"blink" | "happy" | "shy" | "glow">("happy");
   const [petState, setPetState] = useState<"idle" | "sitting" | "sleeping">("idle");
   const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null);
-  const [chatInput, setChatInput] = useState("");
   const [feedEffect, setFeedEffect] = useState<string | null>(null);
   const roomRef = useRef<HTMLDivElement | null>(null);
 
@@ -1655,55 +1654,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     }, 1000);
   };
 
-  // Submit chat talking to Pet
-  const handleChatSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
 
-    const msg = chatInput.trim();
-    setChatInput("");
-    setIsDancing(true);
-
-    let reply = "";
-    let nextExpr: "blink" | "happy" | "shy" | "glow" = "happy";
-
-    const pName = activeTab === "single" ? soloPetName : activeGroup?.pet?.name || "小星";
-
-    if (msg.includes("喜歡") || msg.includes("愛") || msg.includes("love")) {
-      reply = `唔哇！聽到你說這句話，我的棉花糖外衣都要害羞得變成蜜桃粉紅了～💖 我也最愛最愛你了！(蓬蓬抱抱)`;
-      nextExpr = "glow";
-      if (activeTab === "single") setSoloLove(prev => Math.min(100, prev + 10));
-    } else if (msg.includes("餓") || msg.includes("吃") || msg.includes("點心") || msg.includes("飯") || msg.includes("冰箱")) {
-      reply = `摸摸肚子... 肚子有一點扁扁的呢！好想吃草莓冰箱 🧊 裡的水蜜桃棉花糖和布丁喔 ✨`;
-      nextExpr = "shy";
-    } else if (msg.includes("辛苦") || msg.includes("累") || msg.includes("難過") || msg.includes("傷心")) {
-      reply = `別難過，快把頭埋在我的棉花糖身體裡！暖呼呼拍拍你，今天有我陪你，把所有不開心都融化在星光裡吧 🧸⭐`;
-      nextExpr = "glow";
-      if (activeTab === "single") setSoloLove(prev => Math.min(100, prev + 8));
-    } else if (msg.includes("可愛") || msg.includes("美") || msg.includes("帥")) {
-      reply = `嘿嘿～被你這樣誇獎，我的小耳朵都要害羞到發光了！你也是宇宙中最耀眼的！✨`;
-      nextExpr = "shy";
-      if (activeTab === "single") setSoloLove(prev => Math.min(100, prev + 6));
-    } else {
-      const fallbackReplies = [
-        `哇！你說的「${msg}」我聽得好認真喔！真想一直聽你分享生活～🌸`,
-        `聽你講話時，我的頭上好像在放小煙火呢 🎆！今天過得好嗎？`,
-        `不管發生什麼事，我都會在粉紅星空之家裡一直守護、陪伴你唷！🪐`,
-        `眨眨眼睛～接收到了你的宇宙波段！我們的心跳頻率是不是同步了呢？💓`
-      ];
-      reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-      nextExpr = "blink";
-      if (activeTab === "single") setSoloLove(prev => Math.min(100, prev + 3));
-    }
-
-    setBubbleText(reply);
-    setExpression(nextExpr);
-    addSoloExp(5);
-
-    setTimeout(() => {
-      setIsDancing(false);
-    }, 1000);
-  };
 
   // Hourly Photo sharing submit
   const handlePhotoShareSubmit = async (e: React.FormEvent) => {
@@ -2331,7 +2282,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                     exit={{ opacity: 0 }}
                     className="text-[10px] text-gray-400 font-medium italic pl-1"
                   >
-                    寵物房間很安靜，輕輕觸摸星寵或與牠們聊天，聽聽牠們的心聲吧 ✨
+                    寵物房間很安靜，輕輕觸摸星寵，聽聽牠們的心聲吧 ✨
                   </motion.div>
                 ) : (
                   <div className="w-full flex items-center justify-start overflow-hidden">
@@ -3236,34 +3187,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
             </div>
           )}
 
-          {/* CHAT / INTERACTION PANEL */}
-          <div className="bg-white/60 border border-[#FF799C]/15 rounded-2xl p-4">
-            <h3 className="text-xs font-bold text-[#6E4B55] mb-2 flex items-center justify-between">
-              <span>💬 與 {currentPetName} 語音聊天</span>
-              <button
-                onClick={handleStarClick}
-                className="text-[9px] text-[#FF799C] hover:underline cursor-pointer"
-              >
-                戳一下星星 ⚡
-              </button>
-            </h3>
 
-            <form onSubmit={handleChatSubmit} className="flex gap-1.5">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder={`跟 ${currentPetName} 聊聊天吧...`}
-                className="flex-1 bg-white/80 border border-[#FF799C]/20 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-[#FF799C] text-[#6E4B55]"
-              />
-              <button
-                type="submit"
-                className="bg-[#FF799C] hover:bg-[#FF799C]/90 text-white p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
-              >
-                <Send className="h-3.5 w-3.5" />
-              </button>
-            </form>
-          </div>
 
           {/* DRAGGABLE FURNITURE WINDOW */}
           <div className="bg-white/60 border border-[#FF799C]/15 rounded-2xl p-4">
@@ -3682,7 +3606,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                       <span className="text-base leading-none">💖</span>
                       <div>
                         <strong className="text-[#FF799C] block">多與星寵貼貼互動</strong>
-                        點擊、輕輕撫摸、拍打或擁抱萌星家園內的小寵物，或者在對話框內和牠們打字聊天，都會隨機掉落星星幣！
+                        點擊、輕輕撫摸、拍打或擁抱萌星家園內的小寵物，都會隨機掉落星星幣！
                       </div>
                     </li>
                     <li className="flex gap-2">

@@ -55,7 +55,9 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
   const [displayedCandies, setDisplayedCandies] = useState<CandyPost[]>([]);
 
   const fetchCandies = async () => {
-    setIsLoading(true);
+    if (candies.length === 0) {
+      setIsLoading(true);
+    }
     setErrorMsg("");
     try {
       // Fetch posts and categories together
@@ -70,7 +72,7 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
         const filtered = data.filter((item: any) => item.type === "candies" && item.status === "approved");
         setCandies(filtered);
         
-        // Pick 8 random approved candies to put inside the jar
+        // Pick 8 approved candies to put inside the jar (stably)
         updateJarDisplay(filtered);
       } else {
         setErrorMsg("無法讀取糖果罐內容。");
@@ -95,9 +97,22 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
       setDisplayedCandies([]);
       return;
     }
-    // Shuffle and slice up to 8 candies
-    const shuffled = [...allCandies].sort(() => 0.5 - Math.random());
-    setDisplayedCandies(shuffled.slice(0, 8));
+    setDisplayedCandies((prev) => {
+      if (prev.length > 0) {
+        // Keep currently displayed candies that are still present in allCandies
+        const next = prev.filter((p) => allCandies.some((c) => c.id === p.id));
+        if (next.length >= 8 || allCandies.length <= next.length) {
+          return next;
+        }
+        // Fill up with more from allCandies if needed
+        const remaining = allCandies.filter((c) => !next.some((n) => n.id === c.id));
+        const shuffled = [...remaining].sort(() => 0.5 - Math.random());
+        return [...next, ...shuffled].slice(0, 8);
+      }
+      // Initial random shuffle
+      const shuffled = [...allCandies].sort(() => 0.5 - Math.random());
+      return shuffled.slice(0, 8);
+    });
   };
 
   useEffect(() => {

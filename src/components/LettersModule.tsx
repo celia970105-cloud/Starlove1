@@ -68,7 +68,9 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
   };
 
   const fetchLetters = async () => {
-    setIsLoading(true);
+    if (letters.length === 0) {
+      setIsLoading(true);
+    }
     setError("");
     try {
       const [res, catRes] = await Promise.all([

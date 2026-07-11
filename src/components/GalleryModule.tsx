@@ -84,7 +84,9 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
   const years = ["All", "2026", "2025", "2024"];
 
   const fetchPhotos = async () => {
-    setIsLoading(true);
+    if (photos.length === 0) {
+      setIsLoading(true);
+    }
     setError("");
     try {
       const [res, catRes] = await Promise.all([

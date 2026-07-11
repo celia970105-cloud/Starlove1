@@ -30,7 +30,9 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
   const [submitError, setSubmitError] = useState("");
 
   const fetchArtworks = async () => {
-    setIsLoading(true);
+    if (artworks.length === 0) {
+      setIsLoading(true);
+    }
     setError("");
     try {
       const [res, catRes] = await Promise.all([

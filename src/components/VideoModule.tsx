@@ -153,13 +153,13 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
     fetchVideos();
   }, [globalRefreshCount]);
 
-  // Update player source and play state on active video change
+  // Update player source and play state on active video ID change
   useEffect(() => {
     setIsPlayerPlaying(false);
     if (videoPlayerRef.current) {
       videoPlayerRef.current.load();
     }
-  }, [activeVideo]);
+  }, [activeVideo?.id]);
 
   const toggleVideoPlayback = () => {
     if (!videoPlayerRef.current) return;

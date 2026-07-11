@@ -3136,6 +3136,67 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         group.pet.furniture = furniture;
         message = "成功移動家具！";
       }
+      else if (actionType === "buy-furniture") {
+        const { item } = payload;
+        if (!group.pet.furniture) group.pet.furniture = [];
+        if (group.pet.furniture.some((f: any) => f.id === item.id)) {
+          return jsonResponse({ error: `家庭已經擁有「${item.name}」這件家具了喔！` }, 400);
+        }
+        if ((group.star_coins || 0) < item.cost) {
+          return jsonResponse({ error: `共享家庭幣不足，置辦需要 ${item.cost} 🪙！` }, 400);
+        }
+        group.star_coins = (group.star_coins || 0) - item.cost;
+
+        const newFurnitureItem = {
+          id: item.id,
+          name: item.name,
+          x: 50 + Math.random() * 150,
+          y: 100 + Math.random() * 80,
+          description: item.description
+        };
+        group.pet.furniture.push(newFurnitureItem);
+
+        // Earn EXP for pet too!
+        const targetId = group.focusedPetId || "star";
+        if (!group.pets_v2) {
+          group.pets_v2 = [
+            {
+              id: "star",
+              name: group.pet?.name || "蜜桃粉萌星",
+              species: "star",
+              level: group.pet?.level || 1,
+              exp: group.pet?.exp || 0,
+              fullness: group.pet?.fullness || 50,
+              love: group.pet?.love || 50,
+              customSkin: group.pet?.custom_skin || "",
+              currentHome: group.currentHomeId || "home_star"
+            }
+          ];
+        }
+        const p = group.pets_v2.find((x: any) => x.id === targetId);
+        if (p) {
+          const xpGained = 50;
+          p.exp = (p.exp || 0) + xpGained;
+          const xpNeeded = (p.level || 1) * 100;
+          let leveledUp = false;
+          if (p.exp >= xpNeeded) {
+            p.exp -= xpNeeded;
+            p.level = (p.level || 1) + 1;
+            leveledUp = true;
+          }
+          if (targetId === (group.focusedPetId || "star")) {
+            group.pet.level = p.level;
+            group.pet.exp = p.exp;
+          }
+          if (leveledUp) {
+            message = `🎉 成功購入高檔家具「${item.name}」！扣除家庭幣 ${item.cost}，且星寵「${p.name}」升級到 Lv.${p.level} 了！🌟`;
+          } else {
+            message = `🎉 成功購入高檔家具「${item.name}」！扣除家庭幣 ${item.cost}，且「${p.name}」獲得了 ${xpGained} 經驗值！✨`;
+          }
+        } else {
+          message = `🎉 成功購入高檔家具「${item.name}」！扣除家庭幣 ${item.cost}！`;
+        }
+      }
       else if (actionType === "buy-food") {
         const { foodId, quantity, cost } = payload;
         if ((group.star_coins || 0) < cost) {

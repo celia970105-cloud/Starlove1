@@ -15,14 +15,6 @@ interface PetsModuleProps {
   onRefreshData?: () => void;
 }
 
-const SNAP_PRESET_IMAGES = [
-  { name: "🌸 蜜桃甜心", url: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500" },
-  { name: "🐱 星空萌貓", url: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500" },
-  { name: "🍓 草莓派對", url: "https://images.unsplash.com/photo-1569591159212-b02ea8a9f239?w=500" },
-  { name: "🥞 布丁萌星", url: "https://images.unsplash.com/photo-1477884213980-b111f22879f4?w=500" },
-  { name: "✨ 夢幻極光", url: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500" }
-];
-
 // Food / Treats inside the Refrigerator
 interface FoodItem {
   id: string;
@@ -724,11 +716,34 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
   const [selectedFriendForSnap, setSelectedFriendForSnap] = useState<any | null>(null);
   const [snapCaption, setSnapCaption] = useState("");
   const [snapSourceType, setSnapSourceType] = useState<"camera" | "upload">("camera");
-  const [selectedPresetIndex, setSelectedPresetIndex] = useState(0);
   const [uploadedSnapBase64, setUploadedSnapBase64] = useState("");
   const [isSendingSnap, setIsSendingSnap] = useState(false);
   const [snapMessage, setSnapMessage] = useState("");
   const [snapError, setSnapError] = useState("");
+
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [capturedCameraBase64, setCapturedCameraBase64] = useState<string>("");
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const stopCameraStream = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
+  };
+
+  useEffect(() => {
+    if (!selectedFriendForSnap || snapSourceType !== "camera") {
+      stopCameraStream();
+    }
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [selectedFriendForSnap, snapSourceType]);
 
   // Share Photo in Group state
   const [isSharingPhoto, setIsSharingPhoto] = useState(false);
@@ -1135,56 +1150,79 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     }
   };
 
-  const handleBuyShopFurniture = (item: ShopFurnitureItem) => {
-    if (soloCoins < item.cost) {
-      triggerInsufficientCoinsModal(item.cost, `購入高檔家具「${item.name}」`);
-      return;
-    }
+  const handleBuyShopFurniture = async (item: ShopFurnitureItem) => {
+    if (activeTab === "single") {
+      if (soloCoins < item.cost) {
+        triggerInsufficientCoinsModal(item.cost, `購入高檔家具「${item.name}」`);
+        return;
+      }
 
-    if (soloFurniture.some(f => f.id === item.id)) {
-      alert(`❌ 你已經擁有「${item.name}」這件家具了，快去房間裡拖曳擺放它吧！🌸`);
-      return;
-    }
+      if (soloFurniture.some(f => f.id === item.id)) {
+        alert(`❌ 你已經擁有「${item.name}」這件家具了，快去房間裡拖曳擺放它吧！🌸`);
+        return;
+      }
 
-    const newCoins = soloCoins - item.cost;
-    const newFurnitureItem: FurnitureItem = {
-      id: item.id,
-      name: item.name,
-      x: 50 + Math.random() * 150,
-      y: 100 + Math.random() * 80,
-      description: item.description
-    };
-    const updatedFurniture = [...soloFurniture, newFurnitureItem];
-
-    setSoloCoins(newCoins);
-    setSoloFurniture(updatedFurniture);
-    localStorage.setItem(`${localKey}_coins`, String(newCoins));
-    localStorage.setItem(`${localKey}_furniture`, JSON.stringify(updatedFurniture));
-
-    // Update Achievements & EXP
-    updateAchievementProgress("buy_furniture", updatedFurniture.length);
-    addSoloExp(50); // 購入家具獲得 50 經驗！
-
-    alert(`🎉 成功購入高檔家具「${item.name}」！已扣除 ${item.cost} 星星幣。新家具已放進房間，可以隨時拖曳移動！✨`);
-
-    // Sync to server
-    if (currentUser) {
-      const updatedPet = {
-        name: soloPetName,
-        fullness: soloFullness,
-        love: soloLove,
-        coins: newCoins,
-        furniture: updatedFurniture,
-        fridge: soloFridgeFood,
-        custom_skin: soloCustomSkin,
-        level: soloLevel,
-        exp: soloExp
+      const newCoins = soloCoins - item.cost;
+      const newFurnitureItem: FurnitureItem = {
+        id: item.id,
+        name: item.name,
+        x: 50 + Math.random() * 150,
+        y: 100 + Math.random() * 80,
+        description: item.description
       };
-      fetch("/api/users/save-solo-pet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: currentUser.id, solo_pet: updatedPet })
-      });
+      const updatedFurniture = [...soloFurniture, newFurnitureItem];
+
+      setSoloCoins(newCoins);
+      setSoloFurniture(updatedFurniture);
+      localStorage.setItem(`${localKey}_coins`, String(newCoins));
+      localStorage.setItem(`${localKey}_furniture`, JSON.stringify(updatedFurniture));
+
+      // Update Achievements & EXP
+      updateAchievementProgress("buy_furniture", updatedFurniture.length);
+      addSoloExp(50); // 購入家具獲得 50 經驗！
+
+      alert(`🎉 成功購入高檔家具「${item.name}」！已扣除 ${item.cost} 星星幣。新家具已放進房間，可以隨時拖曳移動！✨`);
+
+      // Sync to server
+      if (currentUser) {
+        const updatedPet = {
+          name: soloPetName,
+          fullness: soloFullness,
+          love: soloLove,
+          coins: newCoins,
+          furniture: updatedFurniture,
+          fridge: soloFridgeFood,
+          custom_skin: soloCustomSkin,
+          level: soloLevel,
+          exp: soloExp
+        };
+        fetch("/api/users/save-solo-pet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: currentUser.id, solo_pet: updatedPet })
+        });
+      }
+    } else if (activeTab === "coparent") {
+      if (!activeGroup) {
+        alert("⚠️ 請先選擇或建立一個共同飼養家庭小組喔！");
+        return;
+      }
+      const groupCoins = activeGroup.star_coins || 0;
+      if (groupCoins < item.cost) {
+        triggerInsufficientCoinsModal(item.cost, `共同家庭置辦高檔家具「${item.name}」`);
+        return;
+      }
+
+      const coparentFurniture = activeGroup.pet?.furniture || [];
+      if (coparentFurniture.some((f: any) => f.id === item.id)) {
+        alert(`❌ 共同家庭已經擁有「${item.name}」這件家具了，快去房間裡拖曳擺放它吧！🌸`);
+        return;
+      }
+
+      const res = await executeCoparentAction("buy-furniture", { item });
+      if (res && res.success) {
+        alert(`🎉 共同家庭成功置辦高級家具「${item.name}」！扣除共享家庭幣 ${item.cost}。新家具已放進房間，可以隨時拖曳移動！✨`);
+      }
     }
   };
 
@@ -2255,23 +2293,33 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
         </div>
         )}
 
-        {activeTab === "single" && (
+        {(activeTab === "single" || (activeTab === "coparent" && activeGroup)) && (
           <div className="mt-3.5 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/75 border border-[#FF799C]/20 rounded-[24px] p-4 max-w-2xl w-full mx-auto shadow-xs">
             {/* Level & EXP Progress */}
             <div className="flex flex-col items-start w-full sm:w-auto flex-1 px-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs bg-gradient-to-r from-[#FF799C] to-[#FFAEC9] text-white font-black px-2.5 py-0.5 rounded-full shadow-xs">
-                  Lv.{soloLevel}
+                  Lv.{activeTab === "single" ? soloLevel : (focusedPetObj?.level || activeGroup?.pet?.level || 1)}
                 </span>
                 <span className="text-[11px] text-[#6E4B55] font-bold">
-                  {soloPetName} 的經驗值：{soloExp} / {soloLevel * 100}
+                  {activeTab === "single" ? soloPetName : (focusedPetObj?.name || activeGroup?.pet?.name || "蜜桃粉萌星")} 的經驗值：
+                  {activeTab === "single" ? soloExp : (focusedPetObj?.exp || activeGroup?.pet?.exp || 0)} /{" "}
+                  {activeTab === "single" ? (soloLevel * 100) : ((focusedPetObj?.level || activeGroup?.pet?.level || 1) * 100)}
                 </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden border border-[#FF799C]/10">
                 <motion.div
                   className="bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] h-full rounded-full"
                   initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(100, (soloExp / (soloLevel * 100)) * 100)}%` }}
+                  animate={{
+                    width: `${Math.min(
+                      100,
+                      activeTab === "single"
+                        ? (soloExp / (soloLevel * 100)) * 100
+                        : (((focusedPetObj?.exp || activeGroup?.pet?.exp || 0) /
+                            ((focusedPetObj?.level || activeGroup?.pet?.level || 1) * 100)) * 100)
+                    )}%`,
+                  }}
                   transition={{ duration: 0.5, ease: "easeOut" }}
                 />
               </div>
@@ -3898,14 +3946,14 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                   onClick={() => setSnapSourceType("camera")}
                   className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${snapSourceType === "camera" ? "bg-white text-[#FF799C] shadow-xs" : "text-[#6E4B55]/70"}`}
                 >
-                  📷 萌寵鏡頭
+                  📷 現在拍攝
                 </button>
                 <button
                   type="button"
                   onClick={() => setSnapSourceType("upload")}
                   className={`flex-1 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${snapSourceType === "upload" ? "bg-white text-[#FF799C] shadow-xs" : "text-[#6E4B55]/70"}`}
                 >
-                  🖼️ 本機相冊
+                  🖼️ 手機相冊上傳
                 </button>
               </div>
 
@@ -3913,11 +3961,25 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
               <div className="bg-white p-3 pb-4 rounded-xl shadow-lg border border-pink-100 max-w-[210px] mx-auto rotate-[1deg] mb-4">
                 <div className="aspect-square w-full rounded-md bg-gray-50 border border-gray-100 overflow-hidden relative flex items-center justify-center">
                   {snapSourceType === "camera" ? (
-                    <img
-                      src={SNAP_PRESET_IMAGES[selectedPresetIndex].url}
-                      alt="Preset"
-                      className="h-full w-full object-cover"
-                    />
+                    capturedCameraBase64 ? (
+                      <img
+                        src={capturedCameraBase64}
+                        alt="Captured"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : cameraActive ? (
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        className="h-full w-full object-cover bg-black"
+                      />
+                    ) : (
+                      <div className="text-center p-3">
+                        <Camera className="h-6 w-6 text-gray-300 mx-auto mb-1" />
+                        <span className="text-[9px] text-gray-400 block font-sans">相機尚未開啟</span>
+                      </div>
+                    )
                   ) : uploadedSnapBase64 ? (
                     <img
                       src={uploadedSnapBase64}
@@ -3949,20 +4011,81 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
               {/* Controls */}
               {snapSourceType === "camera" ? (
-                <div className="space-y-1.5 mb-4">
-                  <span className="text-[8px] text-gray-400 block font-mono">🎨 選擇萌萌寵物鏡頭特效：</span>
-                  <div className="flex gap-1.5 overflow-x-auto pb-1 max-w-full">
-                    {SNAP_PRESET_IMAGES.map((img, idx) => (
-                      <button
-                        key={img.name}
-                        type="button"
-                        onClick={() => setSelectedPresetIndex(idx)}
-                        className={`px-2 py-1 rounded-full text-[9px] font-bold shrink-0 border transition-all cursor-pointer ${selectedPresetIndex === idx ? "bg-[#FF799C] text-white border-[#FF799C]" : "bg-white text-gray-500 border-gray-100 hover:bg-pink-50"}`}
-                      >
-                        {img.name}
-                      </button>
-                    ))}
-                  </div>
+                <div className="mb-4 flex flex-col items-center gap-2">
+                  {!cameraActive && !capturedCameraBase64 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                          setCameraStream(stream);
+                          setCameraActive(true);
+                          setSnapError("");
+                          setTimeout(() => {
+                            if (videoRef.current) {
+                              videoRef.current.srcObject = stream;
+                            }
+                          }, 150);
+                        } catch (err) {
+                          console.error("Camera access failed:", err);
+                          setSnapError("無法存取相機，請檢查相機權限或使用相冊上傳 📷");
+                        }
+                      }}
+                      className="bg-gradient-to-r from-[#FF799C] to-[#FF9EBA] hover:opacity-95 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span>開啟相機鏡頭</span>
+                    </button>
+                  )}
+
+                  {cameraActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (videoRef.current) {
+                          const canvas = document.createElement("canvas");
+                          canvas.width = videoRef.current.videoWidth || 640;
+                          canvas.height = videoRef.current.videoHeight || 480;
+                          const ctx = canvas.getContext("2d");
+                          if (ctx) {
+                            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                            const dataUrl = canvas.toDataURL("image/jpeg");
+                            setCapturedCameraBase64(dataUrl);
+                            stopCameraStream();
+                          }
+                        }
+                      }}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer animate-pulse"
+                    >
+                      <span>📸 立即拍照</span>
+                    </button>
+                  )}
+
+                  {capturedCameraBase64 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setCapturedCameraBase64("");
+                        try {
+                          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                          setCameraStream(stream);
+                          setCameraActive(true);
+                          setSnapError("");
+                          setTimeout(() => {
+                            if (videoRef.current) {
+                              videoRef.current.srcObject = stream;
+                            }
+                          }, 150);
+                        } catch (err) {
+                          console.error("Camera access failed:", err);
+                          setSnapError("無法存取相機，請檢查相機權限或使用相冊上傳 📷");
+                        }
+                      }}
+                      className="bg-[#6E4B55] hover:opacity-90 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>🔄 重新拍攝</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="mb-4">
@@ -4029,7 +4152,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                     setSnapMessage("");
 
                     const imageUrl = snapSourceType === "camera" 
-                      ? SNAP_PRESET_IMAGES[selectedPresetIndex].url 
+                      ? capturedCameraBase64 
                       : uploadedSnapBase64;
 
                     if (!imageUrl) {
@@ -4122,16 +4245,18 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
               {/* Wallet Balance */}
               <div className="bg-[#FFF4F7] border border-[#FF799C]/20 p-2.5 rounded-2xl flex justify-between items-center mb-4 text-xs font-bold text-[#6E4B55]">
-                <span>🪙 我的星星幣餘額：</span>
+                <span>🪙 {activeTab === "single" ? "我的星星幣餘額：" : "家庭共享星星幣餘額："}</span>
                 <span className="text-sm font-mono text-[#FF799C] flex items-center gap-1">
-                  <Coins className="h-4.5 w-4.5" /> {soloCoins} 🪙
+                  <Coins className="h-4.5 w-4.5" /> {activeTab === "single" ? soloCoins : (activeGroup?.star_coins || 0)} 🪙
                 </span>
               </div>
 
               {/* Product list */}
               <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
                 {SHOP_FURNITURE_TEMPLATES.map(item => {
-                  const owned = soloFurniture.some(f => f.id === item.id);
+                  const owned = activeTab === "single"
+                    ? soloFurniture.some(f => f.id === item.id)
+                    : (activeGroup?.pet?.furniture || []).some((f: any) => f.id === item.id);
                   return (
                     <div
                       key={item.id}

@@ -27,8 +27,55 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState("");
-  const [isReadingFile, setIsReadingFile] = useState(false);
+   const [isReadingFile, setIsReadingFile] = useState(false);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [submissionType, setSubmissionType] = useState<"file" | "url">("file");
+
+  const parseVideoUrl = (url: string) => {
+    if (!url) return { type: "none", embedUrl: "" };
+
+    const cleanUrl = url.trim();
+
+    // Check if base64 or direct mp4/mov/webm file
+    if (
+      cleanUrl.startsWith("data:video/") || 
+      cleanUrl.includes("starry_assets") || 
+      cleanUrl.toLowerCase().endsWith(".mp4") || 
+      cleanUrl.toLowerCase().endsWith(".mov") || 
+      cleanUrl.toLowerCase().endsWith(".webm")
+    ) {
+      return { type: "raw", url: cleanUrl };
+    }
+
+    // YouTube
+    const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const ytMatch = cleanUrl.match(ytRegex);
+    if (ytMatch) {
+      return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0` };
+    }
+
+    // Bilibili
+    const biliRegex = /(?:bilibili\.com\/video\/|bvid=)(BV[a-zA-Z0-9]+)/i;
+    const biliMatch = cleanUrl.match(biliRegex);
+    if (biliMatch) {
+      return { type: "bilibili", embedUrl: `https://player.bilibili.com/player.html?bvid=${biliMatch[1]}&high_quality=1&as_wide=1&autoplay=1` };
+    }
+
+    // QQ Video
+    const qqRegex = /(?:v\.qq\.com\/x\/(?:page|cover)\/.*\/|vid=)([a-zA-Z0-9_]{11})/;
+    const qqMatch = cleanUrl.match(qqRegex);
+    if (qqMatch) {
+      return { type: "qq", embedUrl: `https://v.qq.com/txp/iframe/player.html?vid=${qqMatch[1]}&autoplay=1` };
+    }
+
+    // Fallback if starts with http
+    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+      return { type: "raw", url: cleanUrl };
+    }
+
+    // Default to raw
+    return { type: "raw", url: cleanUrl };
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -209,14 +256,36 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
         <div className="lg:col-span-8 space-y-4">
           <div className="relative aspect-video rounded-3xl overflow-hidden bg-black/60 border border-white/10 shadow-[0_0_50px_rgba(255,121,156,0.15)] group">
             {activeVideo ? (
-              <video
-                ref={videoPlayerRef}
-                src={activeVideo.video_url}
-                controls
-                className="w-full h-full object-cover"
-                onPlay={() => setIsPlayerPlaying(true)}
-                onPause={() => setIsPlayerPlaying(false)}
-              />
+              (() => {
+                const parsed = parseVideoUrl(activeVideo.video_url);
+                if (parsed.type === "raw") {
+                  return (
+                    <video
+                      ref={videoPlayerRef}
+                      src={parsed.url}
+                      controls
+                      preload="metadata"
+                      className="w-full h-full object-cover bg-black"
+                      onPlay={() => setIsPlayerPlaying(true)}
+                      onPause={() => setIsPlayerPlaying(false)}
+                    />
+                  );
+                } else {
+                  return (
+                    <iframe
+                      src={parsed.embedUrl}
+                      title={activeVideo.title}
+                      scrolling="no"
+                      border="0"
+                      frameborder="no"
+                      framespacing="0"
+                      allowfullscreen="true"
+                      allow="autoplay; encrypted-media; fullscreen"
+                      className="w-full h-full border-0 bg-black"
+                    />
+                  );
+                }
+              })()
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white/30">
                 <Film className="h-16 w-16 mb-2 animate-pulse" />
@@ -224,8 +293,8 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
               </div>
             )}
 
-            {/* Custom Overlay (Only visible when paused) */}
-            {activeVideo && !isPlayerPlaying && (
+            {/* Custom Overlay (Only visible when paused and is raw video) */}
+            {activeVideo && parseVideoUrl(activeVideo.video_url).type === "raw" && !isPlayerPlaying && (
               <div 
                 onClick={toggleVideoPlayback}
                 className="absolute inset-0 bg-black/35 flex items-center justify-center cursor-pointer transition-all hover:bg-black/20"
@@ -250,9 +319,21 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                     {new Date(activeVideo.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                <h3 className="text-xl font-serif font-light text-[#FF799C] tracking-wide">
-                  {activeVideo.title}
-                </h3>
+                <div className="flex justify-between items-start gap-4">
+                  <h3 className="text-xl font-serif font-light text-[#FF799C] tracking-wide flex-1">
+                    {activeVideo.title}
+                  </h3>
+                  {activeVideo.video_url && (
+                    <a
+                      href={activeVideo.video_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-[#FF799C] hover:underline flex items-center gap-1 shrink-0 bg-[#FF799C]/10 px-2.5 py-1 rounded-lg border border-[#FF799C]/15 transition-all hover:bg-[#FF799C]/20"
+                    >
+                      <span>開啟原片連結 🔗</span>
+                    </a>
+                  )}
+                </div>
                 <p className="text-xs text-[#6E4B55]/80 mt-1">
                   由星願主應援者 <span className="text-[#6E4B55] font-semibold">@{activeVideo.username}</span> 溫馨分享
                 </p>
@@ -395,35 +476,76 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">選擇手機相簿 / 本機影片 *</label>
-                    <div className="relative group">
-                      <input
-                        type="file"
-                        accept="video/*"
-                        id="video-upload-input"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="video-upload-input"
-                        className="flex flex-col items-center justify-center border-2 border-dashed border-[#FF799C]/35 hover:border-[#FF799C] bg-[#FFF6F2]/40 hover:bg-[#FFF6F2]/70 rounded-2xl py-6 px-4 text-center cursor-pointer transition-all duration-200"
-                      >
-                        <Film className="h-8 w-8 text-[#FF799C] mb-2 animate-pulse" />
-                        {selectedFileName ? (
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold text-[#FF799C] break-all">{selectedFileName}</p>
-                            <p className="text-[10px] text-gray-400">點擊此處重新選擇影片</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-[#6E4B55]/85">點擊選擇手機影片庫 / 媒體檔案</p>
-                            <p className="text-[9px] text-[#6E4B55]/50">支援 MP4, MOV, WebM 等格式，建議 35MB 以內</p>
-                          </div>
-                        )}
-                      </label>
-                    </div>
+                  {/* Submission Type Toggle */}
+                  <div className="flex bg-[#FFF6F2] p-1 rounded-xl border border-[#FF799C]/20">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmissionType("file");
+                        setVideoUrl("");
+                        setSelectedFileName("");
+                      }}
+                      className={`flex-1 text-center py-1.5 text-xs font-semibold rounded-lg transition-all ${submissionType === "file" ? "bg-[#FF799C] text-white shadow-sm" : "text-[#6E4B55]/70 hover:text-[#6E4B55]"}`}
+                    >
+                      直接影片上傳 📤
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmissionType("url");
+                        setVideoUrl("");
+                        setSelectedFileName("");
+                      }}
+                      className={`flex-1 text-center py-1.5 text-xs font-semibold rounded-lg transition-all ${submissionType === "url" ? "bg-[#FF799C] text-white shadow-sm" : "text-[#6E4B55]/70 hover:text-[#6E4B55]"}`}
+                    >
+                      影音網址 / B站 / YouTube 🔗
+                    </button>
                   </div>
+
+                  {submissionType === "file" ? (
+                    <div>
+                      <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">選擇手機相簿 / 本機影片 *</label>
+                      <div className="relative group">
+                        <input
+                          type="file"
+                          accept="video/*"
+                          id="video-upload-input"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="video-upload-input"
+                          className="flex flex-col items-center justify-center border-2 border-dashed border-[#FF799C]/35 hover:border-[#FF799C] bg-[#FFF6F2]/40 hover:bg-[#FFF6F2]/70 rounded-2xl py-6 px-4 text-center cursor-pointer transition-all duration-200"
+                        >
+                          <Film className="h-8 w-8 text-[#FF799C] mb-2 animate-pulse" />
+                          {selectedFileName ? (
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold text-[#FF799C] break-all">{selectedFileName}</p>
+                              <p className="text-[10px] text-gray-400">點擊此處重新選擇影片</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-[#6E4B55]/85">點擊選擇手機影片庫 / 媒體檔案</p>
+                              <p className="text-[9px] text-[#6E4B55]/50">支援 MP4, MOV, WebM 等格式，建議 35MB 以內</p>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">請貼上影片網址 / 播放網址 *</label>
+                      <input
+                        type="url"
+                        required
+                        placeholder="請貼上 Bilibili (BVxxxx)、YouTube 或 MP4 影片網址..."
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
+                      />
+                      <p className="text-[10px] text-[#6E4B55]/50 mt-1">支援 YouTube、Bilibili 及直接 MP4 音訊/影音連結，自動轉為極速內嵌播放器 ⚡</p>
+                    </div>
+                  )}
 
                   <div className="space-y-3">
                     <div>

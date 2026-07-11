@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Plus, Sparkles, AlertCircle, FileText, CheckCircle, Palette, Settings, Sliders, Eye, EyeOff, Check } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Plus, Sparkles, AlertCircle, FileText, CheckCircle, Palette, Settings, Sliders, Eye, EyeOff, Check, Repeat, Shuffle } from "lucide-react";
 import { MusicPost, User } from "../types";
 
 // Shared global audio engine to persist music across components and page switches
@@ -116,26 +116,36 @@ const parseEmbedUrl = (url: string) => {
   if (lowerUrl.includes("bilibili.com") || lowerUrl.includes("b23.tv")) {
     const bvMatch = url.match(/(BV[a-zA-Z0-9]{10})/i);
     if (bvMatch) {
-      return `https://player.bilibili.com/player.html?bvid=${bvMatch[1]}&page=1&high_quality=1&as_wide=1&autoplay=1`;
+      return `https://player.bilibili.com/player.html?bvid=${bvMatch[1]}&page=1&high_quality=1&as_wide=1&autoplay=1&muted=0`;
     }
     const avMatch = url.match(/\/av([0-9]+)/i);
     if (avMatch) {
-      return `https://player.bilibili.com/player.html?aid=${avMatch[1]}&page=1&high_quality=1&as_wide=1&autoplay=1`;
+      return `https://player.bilibili.com/player.html?aid=${avMatch[1]}&page=1&high_quality=1&as_wide=1&autoplay=1&muted=0`;
     }
     if (url.includes("player.html")) {
-      if (!url.includes("autoplay=1")) {
-        return url + (url.includes("?") ? "&" : "?") + "autoplay=1";
+      let embed = url;
+      if (!embed.includes("autoplay=1")) {
+        embed += (embed.includes("?") ? "&" : "?") + "autoplay=1";
       }
-      return url;
+      if (!embed.includes("muted=0")) {
+        embed += "&muted=0";
+      }
+      return embed;
     }
     return url;
   }
   
   // QQ Music
   if (lowerUrl.includes("qq.com")) {
-    const songMidMatch = url.match(/\/songDetail\/([a-zA-Z0-9]+)/);
+    // Check for songmid in songDetail
+    const songMidMatch = url.match(/(?:songDetail|song)\/([a-zA-Z0-9]+)/);
     if (songMidMatch) {
       return `https://y.qq.com/n/ryqq/player?songmid=${songMidMatch[1]}&autoplay=1`;
+    }
+    // Check for songmid or songid query parameters
+    const songMidParam = url.match(/songmid=([a-zA-Z0-9]+)/);
+    if (songMidParam) {
+      return `https://y.qq.com/n/ryqq/player?songmid=${songMidParam[1]}&autoplay=1`;
     }
     const songIdMatch = url.match(/songid=([0-9]+)/);
     if (songIdMatch) {
@@ -158,6 +168,12 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   const [volume, setVolume] = useState(sharedAudio ? sharedAudio.volume : 0.8);
   const [isLoading, setIsLoading] = useState(globalTracks.length === 0);
   const [iframeUrl, setIframeUrl] = useState<string>("");
+  const [playMode, setPlayMode] = useState<"list" | "loop" | "shuffle">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("starry_player_play_mode") as any) || "list";
+    }
+    return "list";
+  });
 
   // Customizable Player State
   const [themeColor, setThemeColor] = useState<"pink" | "purple" | "blue" | "amber" | "dark">(() => {
@@ -263,10 +279,11 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
     localStorage.setItem("starry_player_glow", glowIntensity);
     localStorage.setItem("starry_player_bg", panelBg);
     localStorage.setItem("starry_player_iframe_mode", showIframeWindow);
+    localStorage.setItem("starry_player_play_mode", playMode);
     if (customStickerUrl) {
       localStorage.setItem("starry_player_custom_sticker", customStickerUrl);
     }
-  }, [themeColor, discSkin, rotationSpeed, glowIntensity, panelBg, showIframeWindow, customStickerUrl]);
+  }, [themeColor, discSkin, rotationSpeed, glowIntensity, panelBg, showIframeWindow, playMode, customStickerUrl]);
 
   // If user is not logged in, force reset custom skin to zack-jeremy (Only logged-in user can use and see custom skin)
   useEffect(() => {
@@ -481,14 +498,28 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
 
   const nextTrack = () => {
     if (tracks.length === 0) return;
-    const nextIdx = (currentIdx + 1) % tracks.length;
-    selectTrack(nextIdx, isPlaying);
+    if (playMode === "loop") {
+      selectTrack(currentIdx, isPlaying);
+    } else if (playMode === "shuffle") {
+      const randomIdx = Math.floor(Math.random() * tracks.length);
+      selectTrack(randomIdx, isPlaying);
+    } else {
+      const nextIdx = (currentIdx + 1) % tracks.length;
+      selectTrack(nextIdx, isPlaying);
+    }
   };
 
   const prevTrack = () => {
     if (tracks.length === 0) return;
-    const prevIdx = (currentIdx - 1 + tracks.length) % tracks.length;
-    selectTrack(prevIdx, isPlaying);
+    if (playMode === "loop") {
+      selectTrack(currentIdx, isPlaying);
+    } else if (playMode === "shuffle") {
+      const randomIdx = Math.floor(Math.random() * tracks.length);
+      selectTrack(randomIdx, isPlaying);
+    } else {
+      const prevIdx = (currentIdx - 1 + tracks.length) % tracks.length;
+      selectTrack(prevIdx, isPlaying);
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -908,7 +939,19 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
           </div>
 
           {/* Player controls */}
-          <div className="flex items-center gap-6 mt-6 z-10">
+          <div className="flex items-center gap-4 mt-6 z-10">
+            {/* Play Mode Toggle: Shuffle */}
+            <button
+              onClick={() => {
+                const nextMode = playMode === "shuffle" ? "list" : "shuffle";
+                setPlayMode(nextMode);
+              }}
+              className={`p-2.5 rounded-full transition-all active:scale-95 ${playMode === "shuffle" ? `${currentTheme.accentText} bg-white shadow-sm border border-black/5` : "opacity-60 hover:opacity-90 hover:bg-black/5"}`}
+              title="隨機播放"
+            >
+              <Shuffle className="h-4.5 w-4.5" />
+            </button>
+
             <button 
               onClick={prevTrack}
               className={`p-3 rounded-full transition-all active:scale-95 ${currentTheme.hoverText}`}
@@ -930,6 +973,18 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
               title="下一首"
             >
               <SkipForward className="h-5 w-5" />
+            </button>
+
+            {/* Play Mode Toggle: Loop */}
+            <button
+              onClick={() => {
+                const nextMode = playMode === "loop" ? "list" : "loop";
+                setPlayMode(nextMode);
+              }}
+              className={`p-2.5 rounded-full transition-all active:scale-95 ${playMode === "loop" ? `${currentTheme.accentText} bg-white shadow-sm border border-black/5` : "opacity-60 hover:opacity-90 hover:bg-black/5"}`}
+              title="單曲循環"
+            >
+              <Repeat className="h-4.5 w-4.5" />
             </button>
           </div>
         </div>
@@ -1020,8 +1075,8 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
           {iframeUrl && (
             <div className="mt-4">
               {showIframeWindow === "hidden" ? (
-                <div className="w-0 h-0 opacity-0 absolute pointer-events-none">
-                  <iframe src={iframeUrl} className="w-0 h-0 border-0" allow="autoplay; encrypted-media" />
+                <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none">
+                  <iframe src={iframeUrl} width="100" height="100" className="border-0" allow="autoplay; encrypted-media; fullscreen" referrerPolicy="no-referrer" />
                 </div>
               ) : showIframeWindow === "compact" ? (
                 <div className="rounded-xl overflow-hidden border border-gray-200/40 shadow-inner bg-white/40">
@@ -1029,7 +1084,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                     <span className="flex items-center gap-1">📻 播放源：{currentTrack?.title} (精簡後台播放)</span>
                     <span className="text-green-500 flex items-center gap-1 animate-pulse">● PLAYING</span>
                   </div>
-                  <iframe src={iframeUrl} className="w-full h-24 border-0" allow="autoplay; encrypted-media" />
+                  <iframe src={iframeUrl} className="w-full h-24 border-0" allow="autoplay; encrypted-media; fullscreen" referrerPolicy="no-referrer" />
                 </div>
               ) : (
                 <div className="rounded-xl overflow-hidden border border-gray-200/60 shadow-md bg-white">
@@ -1037,7 +1092,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                     <span className="font-semibold">🎬 完整視聽播放器：{currentTrack?.title}</span>
                     <span className="text-green-500 font-bold animate-pulse">● ACTIVE</span>
                   </div>
-                  <iframe src={iframeUrl} className="w-full h-56 border-0" allow="autoplay; encrypted-media" />
+                  <iframe src={iframeUrl} className="w-full h-56 border-0" allow="autoplay; encrypted-media; fullscreen" referrerPolicy="no-referrer" />
                 </div>
               )}
             </div>

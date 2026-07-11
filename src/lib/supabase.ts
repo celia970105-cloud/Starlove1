@@ -2219,10 +2219,11 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       }
 
       if (type === "videos") {
+        const videoUrl = await uploadBase64ToStorage(payload.video_url);
         const post = {
           ...basePost,
           title: payload.title || "Untitled Video",
-          video_url: payload.video_url,
+          video_url: videoUrl,
           category: payload.category || "General"
         };
         collection.push(post);

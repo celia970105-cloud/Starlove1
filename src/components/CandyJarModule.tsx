@@ -799,7 +799,7 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="relative w-full max-w-lg glass border border-white/60 bg-white/95 rounded-[36px] shadow-2xl p-6 md:p-8 overflow-hidden"
+              className="relative w-full max-w-lg glass border border-white/60 bg-white/95 rounded-[36px] shadow-2xl p-6 md:p-8 overflow-y-auto max-h-[90vh] scrollbar-thin"
             >
               {/* Top gradient glow bar */}
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-pink-400 via-rose-300 to-amber-400" />

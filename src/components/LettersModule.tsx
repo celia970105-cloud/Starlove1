@@ -348,7 +348,7 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className={`w-full max-w-lg p-8 rounded-3xl border ${themeColors[selectedLetter.color_theme]?.bg || themeColors.pink.bg} ${themeColors[selectedLetter.color_theme]?.border || themeColors.pink.border} ${themeColors[selectedLetter.color_theme]?.glow || themeColors.pink.glow} relative text-left shadow-2xl overflow-hidden`}
+              className={`w-full max-w-lg p-8 rounded-3xl border ${themeColors[selectedLetter.color_theme]?.bg || themeColors.pink.bg} ${themeColors[selectedLetter.color_theme]?.border || themeColors.pink.border} ${themeColors[selectedLetter.color_theme]?.glow || themeColors.pink.glow} relative text-left shadow-2xl overflow-y-auto max-h-[90vh] scrollbar-thin`}
             >
               {/* Envelope liner pattern */}
               <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)", backgroundSize: "20px 20px" }} />

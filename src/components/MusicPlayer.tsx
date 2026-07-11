@@ -1381,7 +1381,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                 ✕
               </button>
             </div>
-            <iframe src={iframeUrl} className="w-full h-40 border-0" allow="autoplay; encrypted-media" />
+            <iframe src={iframeUrl} className="w-full h-40 border-0" allow="autoplay; encrypted-media" referrerPolicy="no-referrer" />
           </motion.div>
         )}
 

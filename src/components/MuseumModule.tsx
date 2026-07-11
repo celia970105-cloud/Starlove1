@@ -296,7 +296,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative max-w-4xl w-full bg-white/95 text-[#6E4B55] border border-[#FF799C]/25 rounded-3xl overflow-hidden shadow-2xl p-4 cursor-default"
+              className="relative max-w-4xl w-full bg-white/95 text-[#6E4B55] border border-[#FF799C]/25 rounded-3xl overflow-y-auto max-h-[90vh] md:max-h-[95vh] shadow-2xl p-4 cursor-default scrollbar-thin"
             >
               <button
                 onClick={() => setSelectedArtwork(null)}

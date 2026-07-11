@@ -34,7 +34,7 @@ export default function App() {
   // Leaderboard and active user tracking states
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isStarMenuOpen, setIsStarMenuOpen] = useState(false);
-  const [lastUserActivity, setLastUserActivity] = useState(Date.now());
+  const lastUserActivityRef = useRef(Date.now());
 
   // Custom configurations from admin settings
   const [heroTitle, setHeroTitle] = useState("ALL FOR JIYU");
@@ -357,7 +357,7 @@ export default function App() {
     if (!currentUser) return;
 
     const handleUserInteraction = () => {
-      setLastUserActivity(Date.now());
+      lastUserActivityRef.current = Date.now();
     };
 
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
@@ -366,7 +366,7 @@ export default function App() {
     });
 
     const heartbeatInterval = setInterval(async () => {
-      const inactiveMs = Date.now() - lastUserActivity;
+      const inactiveMs = Date.now() - lastUserActivityRef.current;
       if (inactiveMs < 15000) {
         try {
           await fetch("/api/leaderboard/heartbeat", {
@@ -386,7 +386,7 @@ export default function App() {
       });
       clearInterval(heartbeatInterval);
     };
-  }, [currentUser, lastUserActivity]);
+  }, [currentUser]);
 
   // Poll current user profile for updated star_coins passively every 8 seconds
   useEffect(() => {

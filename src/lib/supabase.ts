@@ -378,8 +378,8 @@ async function getDbKeyInternal(key: string): Promise<any> {
       // Merge local posts with remote posts to prevent any local submissions from being wiped out
       let localPostsUpdated = false;
       for (const localP of localPosts) {
-        // Only resurrect/sync if they are not yet marked as synced: true OR if they are pending but completely missing from DB (likely due to a previous network/schema sync error)
-        if (localP.synced !== true || (localP.status === "pending" && !result.some((p: any) => p.id === localP.id))) {
+        // Only resurrect/sync if they are not yet marked as synced: true
+        if (localP.synced !== true) {
           if (!result.some((p: any) => p.id === localP.id)) {
             result.push(localP);
             // Try to sync/upload this post to Supabase

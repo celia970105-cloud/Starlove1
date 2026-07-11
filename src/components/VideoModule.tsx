@@ -281,6 +281,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                       framespacing="0"
                       allowfullscreen="true"
                       allow="autoplay; encrypted-media; fullscreen"
+                      referrerPolicy="no-referrer"
                       className="w-full h-full border-0 bg-black"
                     />
                   );

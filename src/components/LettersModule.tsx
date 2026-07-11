@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, Eye, X, Mail, CheckCircle, AlertCircle, Heart, Star, Sparkles } from "lucide-react";
 import { LetterPost, User } from "../types";
-import SocialInteractiveBlock from "./SocialInteractiveBlock";
 
 interface LettersModuleProps {
   currentUser: User | null;
@@ -383,17 +382,7 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
                 </div>
               </div>
 
-              {/* Fully integrated live social block */}
-              <div className="bg-white/90 backdrop-blur-md border border-[#FF799C]/20 p-4 rounded-2xl">
-                <SocialInteractiveBlock
-                  currentUser={currentUser}
-                  postId={selectedLetter.id}
-                  postType="letters"
-                  initialLikes={selectedLetter.likes_count ?? 0}
-                  initialFavorites={selectedLetter.favorites_count ?? 0}
-                  onUpdateCounts={fetchLetters}
-                />
-              </div>
+
 
               <div className="mt-6 flex justify-between items-center text-[10px] font-mono text-[#6E4B55]/40 uppercase tracking-widest">
                 <span>STAR WISH PLATFORM</span>

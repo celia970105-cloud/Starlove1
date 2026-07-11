@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ExternalLink, Maximize2, Palette, X, Plus, AlertCircle, Sparkles, Check } from "lucide-react";
 import { ArtworkPost, User } from "../types";
-import SocialInteractiveBlock from "./SocialInteractiveBlock";
 import { compressImage } from "../lib/imageCompressor";
 
 interface MuseumModuleProps {
@@ -356,17 +355,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
                     )}
                   </div>
 
-                  {/* Fully integrated live social block */}
-                  <div className="border-t border-[#FF799C]/10 pt-4">
-                    <SocialInteractiveBlock
-                      currentUser={currentUser}
-                      postId={selectedArtwork.id}
-                      postType="artworks"
-                      initialLikes={selectedArtwork.likes_count ?? 0}
-                      initialFavorites={selectedArtwork.favorites_count ?? 0}
-                      onUpdateCounts={fetchArtworks}
-                    />
-                  </div>
+
 
                   <div className="border-t border-[#FF799C]/10 pt-4 text-[10px] font-mono text-[#6E4B55]/40 tracking-widest uppercase">
                     ALL FOR JIYU • ZACK • JEREMY • AMSS GALLERY

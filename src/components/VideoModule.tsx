@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Video, Play, Pause, Plus, AlertCircle, Film, Sparkles, Check, Flame, Clock } from "lucide-react";
 import { VideoPost, User } from "../types";
-import SocialInteractiveBlock from "./SocialInteractiveBlock";
 
 interface VideoModuleProps {
   currentUser: User | null;
@@ -340,17 +339,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                 </p>
               </div>
 
-              {/* Live social interact block */}
-              <div className="border-t border-[#FF799C]/15 pt-4">
-                <SocialInteractiveBlock
-                  currentUser={currentUser}
-                  postId={activeVideo.id}
-                  postType="videos"
-                  initialLikes={activeVideo.likes_count ?? 0}
-                  initialFavorites={activeVideo.favorites_count ?? 0}
-                  onUpdateCounts={fetchVideos}
-                />
-              </div>
+
             </div>
           )}
         </div>

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Filter, Eye, Camera, X, Check, Calendar, Tag, AlertCircle, RefreshCw } from "lucide-react";
 import { PhotoPost, User } from "../types";
-import SocialInteractiveBlock from "./SocialInteractiveBlock";
 import { compressImage } from "../lib/imageCompressor";
 
 interface GalleryModuleProps {
@@ -388,17 +387,7 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
                     </div>
                   </div>
 
-                  {/* Fully integrated live social block */}
-                  <div className="border-t border-[#FF799C]/15 pt-3">
-                    <SocialInteractiveBlock
-                      currentUser={currentUser}
-                      postId={selectedPhoto.id}
-                      postType="photos"
-                      initialLikes={selectedPhoto.likes_count ?? 0}
-                      initialFavorites={selectedPhoto.favorites_count ?? 0}
-                      onUpdateCounts={fetchPhotos}
-                    />
-                  </div>
+
 
                   <div className="border-t border-[#FF799C]/15 pt-3 text-[10px] font-mono text-[#6E4B55]/40 leading-relaxed uppercase">
                     ALL FOR JIYU • ZACK • JEREMY • AMSS

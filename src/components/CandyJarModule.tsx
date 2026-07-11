@@ -4,7 +4,6 @@ import {
   Sparkles, Send, HelpCircle, Gift, ArrowLeft, RefreshCw, Eye, CheckCircle, X, Compass, User
 } from "lucide-react";
 import { User as UserType, CandyPost } from "../types";
-import SocialInteractiveBlock from "./SocialInteractiveBlock";
 import { backupCandyToStorageAndUser } from "../lib/syncHelper";
 
 interface CandyJarModuleProps {
@@ -882,17 +881,7 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
                       </span>
                     </div>
 
-                    {/* Interactive Comments & Likes block */}
-                    <div className="p-1 bg-white/70 rounded-2xl">
-                      <SocialInteractiveBlock
-                        currentUser={currentUser}
-                        postId={selectedCandy.id}
-                        postType="candies"
-                        initialLikes={selectedCandy.likes_count ?? 0}
-                        initialFavorites={selectedCandy.favorites_count ?? 0}
-                        onUpdateCounts={fetchCandies}
-                      />
-                    </div>
+
                   </motion.div>
                 )}
               </AnimatePresence>

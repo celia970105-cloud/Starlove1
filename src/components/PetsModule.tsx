@@ -13,6 +13,7 @@ import { updateFriendsBackup } from "../lib/syncHelper";
 interface PetsModuleProps {
   currentUser: User | null;
   onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
 // Food / Treats inside the Refrigerator
@@ -369,7 +370,7 @@ interface FallingItem {
   char: string;
 }
 
-export default function PetsModule({ currentUser, onRefreshData }: PetsModuleProps) {
+export default function PetsModule({ currentUser, onRefreshData, globalRefreshCount }: PetsModuleProps) {
   const localKey = currentUser ? `local_star_pet_${currentUser.id}` : `local_star_pet_guest`;
 
   // Toggle Modes: "single" (Solo/Local) or "coparent" (Shared Home) or "friend" (Visiting Friend) or "plog" (PLOG Collage)
@@ -2346,7 +2347,11 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
       {activeTab === "plog" ? (
         <div className="relative z-10 w-full my-6 flex-1">
-          <PlogModule currentUser={currentUser} />
+          <PlogModule 
+            currentUser={currentUser} 
+            onRefreshData={onRefreshData} 
+            globalRefreshCount={globalRefreshCount} 
+          />
         </div>
       ) : (
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 my-6 items-stretch flex-1">

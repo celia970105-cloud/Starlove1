@@ -9,6 +9,8 @@ import { PhotoPost, User } from "../types";
 
 interface PlogModuleProps {
   currentUser: User | null;
+  onRefreshData?: () => void;
+  globalRefreshCount?: number;
 }
 
 interface CollageElement {
@@ -80,7 +82,7 @@ const BG_TEMPLATES = [
   }
 ];
 
-export default function PlogModule({ currentUser }: PlogModuleProps) {
+export default function PlogModule({ currentUser, onRefreshData, globalRefreshCount }: PlogModuleProps) {
   const [photos, setPhotos] = useState<PhotoPost[]>([]);
   const [friendSnaps, setFriendSnaps] = useState<any[]>([]);
   const [isSnapsLoading, setIsSnapsLoading] = useState(false);
@@ -481,7 +483,7 @@ export default function PlogModule({ currentUser }: PlogModuleProps) {
       .finally(() => {
         setIsSnapsLoading(false);
       });
-  }, [currentUser]);
+  }, [currentUser, globalRefreshCount]);
 
   // Fetch photos from API
   useEffect(() => {

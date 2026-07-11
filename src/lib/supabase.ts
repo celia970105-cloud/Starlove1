@@ -29,6 +29,36 @@ const SEED_DATA = {
       background: "",
       star_coins: 0,
       is_guest: true
+    },
+    {
+      id: "user_zack",
+      username: "ZackLover",
+      email: "zack@starry.com",
+      password: "zackpassword",
+      role: "user",
+      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Zack",
+      background: "",
+      star_coins: 100
+    },
+    {
+      id: "user_jeremy",
+      username: "JeremyFan",
+      email: "jeremy@starry.com",
+      password: "jeremypassword",
+      role: "user",
+      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Jeremy",
+      background: "",
+      star_coins: 100
+    },
+    {
+      id: "user_star",
+      username: "MarshmallowStar",
+      email: "star@starry.com",
+      password: "starpassword",
+      role: "user",
+      avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Star",
+      background: "",
+      star_coins: 100
     }
   ],
   posts_photos: [] as any[],
@@ -38,10 +68,55 @@ const SEED_DATA = {
   posts_music: [] as any[],
   posts_candies: [] as any[],
   pets: [] as any[],
-  friendships: [] as any[],
+  friendships: [
+    { id: "fs_1", userId1: "admin", userId2: "user_zack", status: "accepted" },
+    { id: "fs_2", userId1: "admin", userId2: "user_jeremy", status: "accepted" },
+    { id: "fs_3", userId1: "admin", userId2: "user_star", status: "accepted" }
+  ] as any[],
   coparent_groups: [] as any[],
   interactions: [] as any[],
-  friend_snaps: [] as any[],
+  friend_snaps: [
+    {
+      id: "snap_default_1",
+      senderId: "user_zack",
+      senderName: "ZackLover",
+      receiverId: "admin",
+      receiverName: "CeliaAdmin",
+      imageUrl: "https://images.unsplash.com/photo-1518887570146-0612132dd618?w=500",
+      caption: "✨ 跟你分享這張極與禹的應援極光星空！超美！📸",
+      timestamp: new Date(Date.now() - 3600000).toISOString()
+    },
+    {
+      id: "snap_default_2",
+      senderId: "user_jeremy",
+      senderName: "JeremyFan",
+      receiverId: "admin",
+      receiverName: "CeliaAdmin",
+      imageUrl: "https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=500",
+      caption: "🌅 今天的日落就像我們守護星寵的心情，暖洋洋的粉色！",
+      timestamp: new Date(Date.now() - 7200000).toISOString()
+    },
+    {
+      id: "snap_default_3",
+      senderId: "user_star",
+      senderName: "MarshmallowStar",
+      receiverId: "admin",
+      receiverName: "CeliaAdmin",
+      imageUrl: "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?w=500",
+      caption: "🌸 夢幻星夜同感，共築溫馨港灣！一起拼圖紀念吧！",
+      timestamp: new Date(Date.now() - 10800000).toISOString()
+    },
+    {
+      id: "snap_default_4",
+      senderId: "user_zack",
+      senderName: "ZackLover",
+      receiverId: "admin",
+      receiverName: "CeliaAdmin",
+      imageUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500",
+      caption: "🎈 昨晚演唱會現場的盛況！張極和張澤禹真的太耀眼了！🌟",
+      timestamp: new Date(Date.now() - 14400000).toISOString()
+    }
+  ] as any[],
   friend_requests: [] as any[],
   coparent_invitations: [] as any[],
   photo_cooldowns: [] as any[],
@@ -751,9 +826,27 @@ export async function initializeDatabase() {
       try {
         const parsed = JSON.parse(localVal);
         if (Array.isArray(parsed)) {
-          const filtered = parsed.filter((item: any) => !(item && item.id && String(item.id).includes("_seed_")));
-          if (filtered.length !== parsed.length) {
-            localStorage.setItem(`starry_local_${key}`, JSON.stringify(filtered));
+          // If the list is empty or doesn't have the default records, populate them
+          if (parsed.length === 0 && (SEED_DATA as any)[key] && (SEED_DATA as any)[key].length > 0) {
+            localStorage.setItem(`starry_local_${key}`, JSON.stringify((SEED_DATA as any)[key]));
+          } else if (key === "users") {
+            // Ensure suggested seed users are added if they don't exist
+            let updated = false;
+            const seedUsers = (SEED_DATA as any).users;
+            for (const su of seedUsers) {
+              if (!parsed.some((u: any) => u.id === su.id)) {
+                parsed.push(su);
+                updated = true;
+              }
+            }
+            if (updated) {
+              localStorage.setItem(`starry_local_users`, JSON.stringify(parsed));
+            }
+          } else {
+            const filtered = parsed.filter((item: any) => !(item && item.id && String(item.id).includes("_seed_")));
+            if (filtered.length !== parsed.length) {
+              localStorage.setItem(`starry_local_${key}`, JSON.stringify(filtered));
+            }
           }
         }
       } catch (e) {}
@@ -2684,11 +2777,46 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         .map((g: any) => (g.id && g.id.startsWith("group_") ? g.id : `group_${g.id}`));
 
       const friendSnaps = (await getDbKey("friend_snaps")) || [];
-      const snaps = friendSnaps.filter(
+      
+      // Dynamically load group.photos from coparent groups and format them as snaps
+      const groupPhotosAsSnaps: any[] = [];
+      coparentGroups.forEach((g: any) => {
+        if (g.member_ids && g.member_ids.includes(userId) && g.photos) {
+          g.photos.forEach((p: any) => {
+            const snapId = p.id || `photo_${Date.now()}`;
+            const alreadyInSnaps = friendSnaps.some((s: any) => s.id === snapId || s.imageUrl === p.image_url);
+            if (!alreadyInSnaps) {
+              groupPhotosAsSnaps.push({
+                id: snapId,
+                senderId: p.user_id,
+                senderName: p.username || "成員",
+                receiverId: g.id.startsWith("group_") ? g.id : `group_${g.id}`,
+                receiverName: g.name,
+                imageUrl: p.image_url,
+                caption: p.caption || "✨ 每日打卡粉色小家！📸",
+                timestamp: p.timestamp || new Date().toISOString()
+              });
+            }
+          });
+        }
+      });
+
+      const mergedSnaps = [...friendSnaps, ...groupPhotosAsSnaps];
+      const snaps = mergedSnaps.filter(
         (s: any) => s.senderId === userId || s.receiverId === userId || userGroupIds.includes(s.receiverId)
       );
-      snaps.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      return jsonResponse(snaps);
+
+      // Deduplicate by imageUrl to ensure no duplicate photos show up
+      const uniqueSnapsMap = new Map();
+      snaps.forEach((s: any) => {
+        if (!uniqueSnapsMap.has(s.imageUrl)) {
+          uniqueSnapsMap.set(s.imageUrl, s);
+        }
+      });
+      const uniqueSnaps = Array.from(uniqueSnapsMap.values());
+
+      uniqueSnaps.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return jsonResponse(uniqueSnaps);
     }
 
     // 23. POST /api/friends/send-snap

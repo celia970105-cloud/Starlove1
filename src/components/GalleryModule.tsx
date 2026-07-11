@@ -81,7 +81,7 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
     Fanart: "同人同好繪"
   };
 
-  const categories = ["All", "Concert", "Sports Meet", "External Schedule", "Behind the Scenes", "General", ...customCategories];
+  const categories = Array.from(new Set(["All", "Concert", "Sports Meet", "External Schedule", "Behind the Scenes", "General", ...customCategories]));
   const years = ["All", "2026", "2025", "2024"];
 
   const fetchPhotos = async () => {

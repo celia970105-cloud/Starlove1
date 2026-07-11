@@ -927,18 +927,14 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
 
 
               {/* Profile Statistics Bento Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center">
-                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">🎨 應援作品</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center shadow-sm">
+                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">🎨 應援作品數</span>
                   <span className="text-lg font-bold text-[#FF799C] font-mono">{socialStats.posts_count}</span>
                 </div>
-                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center">
-                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">❤️ 累計點讚</span>
-                  <span className="text-lg font-bold text-[#FF799C] font-mono">{socialStats.likes_received_count}</span>
-                </div>
-                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center">
-                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">⭐ 累計收藏</span>
-                  <span className="text-lg font-bold text-[#FF799C] font-mono">{socialStats.favorites_received_count}</span>
+                <div className="bg-[#FFF6F2]/60 border border-[#FF799C]/10 p-3 rounded-2xl text-center shadow-sm">
+                  <span className="text-[10px] text-[#6E4B55]/70 block font-mono">🪙 星星硬幣</span>
+                  <span className="text-lg font-bold text-amber-500 font-mono">{currentUser.star_coins ?? 0}</span>
                 </div>
               </div>
 
@@ -990,16 +986,6 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                   >
                     🌸 我的作品
                     {socialSubTab === "submissions" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF799C] rounded-full" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSocialSubTab("favorites");
-                      fetchFavorites();
-                    }}
-                    className={`pb-1 px-1 relative transition-all cursor-pointer ${socialSubTab === "favorites" ? "text-[#FF799C] font-bold" : "text-[#6E4B55]/70 hover:text-[#FF799C]"}`}
-                  >
-                    ⭐ 收藏應援
-                    {socialSubTab === "favorites" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF799C] rounded-full" />}
                   </button>
                   <button
                     onClick={() => {
@@ -1105,57 +1091,7 @@ export default function UserModule({ currentUser, onLoginSuccess, onLogout, refr
                   </>
                 )}
 
-                {socialSubTab === "favorites" && (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {favoritesList.length === 0 ? (
-                      <div className="text-center py-8 text-xs font-serif text-[#6E4B55]/50 leading-relaxed bg-white/40 rounded-xl border border-dashed border-[#FF799C]/10">
-                        ⭐ 暫無收藏的應援作品。<br />
-                        瀏覽各專區，點擊星星即可收藏作品！
-                      </div>
-                    ) : (
-                      favoritesList.map((sub: any) => (
-                        <button
-                          key={sub.id}
-                          type="button"
-                          onClick={() => {
-                            const typeMap: Record<string, string> = {
-                              photos: "相片",
-                              videos: "影片",
-                              music: "音樂",
-                              letters: "信件",
-                              artworks: "畫作"
-                            };
-                            setSelectedSub({
-                              ...sub,
-                              imageUrl: sub.image_url || sub.cover_url,
-                              type: typeMap[sub.type] || "應援"
-                            });
-                          }}
-                          className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/80 hover:bg-white border border-[#FF799C]/10 text-xs text-[#6E4B55]/90 hover:border-[#FF799C]/30 hover:shadow-sm transition-all text-left active:scale-[0.99] cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            {sub.image_url || sub.cover_url ? (
-                              <div className="h-7 w-7 rounded-md overflow-hidden shrink-0 bg-[#FFF6F2] border border-[#FF799C]/10">
-                                <img src={sub.image_url || sub.cover_url} alt={sub.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                              </div>
-                            ) : (
-                              <div className="h-7 w-7 rounded-md bg-[#FF799C]/5 border border-[#FF799C]/10 flex items-center justify-center shrink-0">
-                                <FileText className="h-3.5 w-3.5 text-[#FF799C]/60" />
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <span className="text-[8px] font-mono bg-amber-500/10 text-amber-600 px-1 py-0.5 rounded mr-1.5 font-bold">
-                                {sub.type === "photos" ? "相片" : sub.type === "videos" ? "影片" : sub.type === "music" ? "音樂" : sub.type === "letters" ? "信件" : "畫作"}
-                              </span>
-                              <span className="font-sans font-medium text-[#6E4B55] truncate inline-block align-middle max-w-[120px]">{sub.title || sub.content?.substring(0, 10)}</span>
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-amber-500">⭐</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+
 
                 {socialSubTab === "notifications" && (
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">

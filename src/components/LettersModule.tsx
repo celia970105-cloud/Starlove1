@@ -167,7 +167,7 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
     }
   };
 
-  const letterCategories = ["All", "General", ...customCategories];
+  const letterCategories = Array.from(new Set(["All", "General", ...customCategories]));
   const filteredLetters = letters.filter(letter => {
     if (selectedCategory === "All") return true;
     return letter.category === selectedCategory;

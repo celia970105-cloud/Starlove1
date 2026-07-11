@@ -201,7 +201,7 @@ export default function CandyJarModule({ currentUser, onRefreshData, globalRefre
     return CANDY_STYLES[code % CANDY_STYLES.length];
   };
 
-  const candyCategories = ["All", "General", ...customCategories];
+  const candyCategories = Array.from(new Set(["All", "General", ...customCategories]));
   const filteredCandies = candies.filter((candy) => {
     if (selectedCategory === "All") return true;
     return candy.category === selectedCategory;

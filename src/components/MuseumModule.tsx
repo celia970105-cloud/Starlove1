@@ -155,7 +155,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
     }
   };
 
-  const artworkCategories = ["All", "General", ...customCategories];
+  const artworkCategories = Array.from(new Set(["All", "General", ...customCategories]));
   const filteredArtworks = artworks.filter(art => {
     if (selectedCategory === "All") return true;
     return art.category === selectedCategory;

@@ -42,6 +42,9 @@ const SEED_DATA = {
   coparent_groups: [] as any[],
   interactions: [] as any[],
   friend_snaps: [] as any[],
+  friend_requests: [] as any[],
+  coparent_invitations: [] as any[],
+  photo_cooldowns: [] as any[],
   last_hourly_trigger: new Date().toISOString(),
   leaderboard_state: {
     date: new Date().toISOString().split("T")[0],
@@ -66,6 +69,9 @@ const DB_KEYS = [
   "coparent_groups",
   "interactions",
   "friend_snaps",
+  "friend_requests",
+  "coparent_invitations",
+  "photo_cooldowns",
   "last_hourly_trigger",
   "leaderboard_state",
   "leaderboard_history",
@@ -415,15 +421,34 @@ async function getDbKeyInternal(key: string): Promise<any> {
       if (localPostsUpdated) {
         localStorage.setItem(`starry_local_${key}`, JSON.stringify(localPosts));
       }
-    } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
-      console.log(`[Supabase Read] Querying public.${key}...`);
-      const { data, error } = await supabase.from(key).select("*");
-      if (error) {
-        console.warn(`[Supabase Read Error] Failed to fetch [${key}]: msg=[${error.message}] code=[${error.code}] details=[${error.details || ""}] hint=[${error.hint || ""}]`, error);
-        throw error;
+    } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps", "friend_requests", "coparent_invitations", "photo_cooldowns"].includes(key)) {
+      try {
+        console.log(`[Supabase Read] Querying public.${key}...`);
+        const { data, error } = await supabase.from(key).select("*");
+        if (error) {
+          console.warn(`[Supabase Read Error] Failed to fetch [${key}]: msg=[${error.message}] code=[${error.code}]`, error);
+          // Fallback to starry_state
+          console.log(`[Supabase Read Fallback] Querying starry_state for key [${key}]...`);
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("starry_state")
+            .select("value")
+            .eq("key", key)
+            .maybeSingle();
+          if (!fallbackError && fallbackData) {
+            result = fallbackData.value;
+            console.log(`[Supabase Read Fallback Success] Fetched state value for [${key}] from starry_state.`);
+          } else {
+            result = null;
+          }
+        } else {
+          result = data;
+          console.log(`[Supabase Read Success] Fetched ${result?.length || 0} items for [${key}].`);
+        }
+      } catch (err) {
+        console.warn(`[Supabase Read Exception] Failed to fetch [${key}], using localStorage fallback.`, err);
+        const local = localStorage.getItem(`starry_local_${key}`);
+        result = local ? JSON.parse(local) : null;
       }
-      result = data;
-      console.log(`[Supabase Read Success] Fetched ${result?.length || 0} items for [${key}].`);
     } else {
       console.log(`[Supabase Read] Querying starry_state for key [${key}]...`);
       const { data, error } = await supabase
@@ -554,14 +579,24 @@ export async function setDbKey(key: string, value: any): Promise<void> {
         throw error;
       }
       console.log(`[Supabase Posts Sync Success] Posts for type [${type}] successfully upserted:`, data);
-    } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps"].includes(key)) {
-      console.log(`[Supabase Collection Sync] Upserting key [${key}]:`, cleanValue);
-      const { data, error } = await supabase.from(key).upsert(cleanValue).select();
-      if (error) {
-        console.warn(`[Supabase Collection Sync Error] Failed to upsert [${key}]:`, error);
-        throw error;
+    } else if (["pets", "friendships", "coparent_groups", "interactions", "friend_snaps", "friend_requests", "coparent_invitations", "photo_cooldowns"].includes(key)) {
+      try {
+        console.log(`[Supabase Collection Sync] Upserting key [${key}]:`, cleanValue);
+        const { data, error } = await supabase.from(key).upsert(cleanValue).select();
+        if (error) {
+          console.warn(`[Supabase Collection Sync Error] Failed to upsert [${key}]:`, error);
+          throw error;
+        }
+        console.log(`[Supabase Collection Sync Success] Successfully synced [${key}]:`, data);
+      } catch (err) {
+        console.warn(`[Supabase Collection Sync Fallback] Saving [${key}] to starry_state as fallback...`, err);
+        const { error } = await supabase
+          .from("starry_state")
+          .upsert({ key, value: cleanValue });
+        if (error) {
+          console.warn(`[Supabase State Fallback Sync Error] Failed to save key [${key}] inside starry_state:`, error);
+        }
       }
-      console.log(`[Supabase Collection Sync Success] Successfully synced [${key}]:`, data);
     } else {
       console.log(`[Supabase State Sync] Upserting key [${key}] in starry_state:`, cleanValue);
       const { error } = await supabase
@@ -2507,7 +2542,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         return jsonResponse({ error: "不能加自己為好友喔！" }, 400);
       }
 
-      const friendships = await getDbKey("friendships");
+      const friendships = await getDbKey("friendships") || [];
       const alreadyFriends = friendships.some(
         (f: any) => (f.userId1 === userId && f.userId2 === targetUser.id) ||
                     (f.userId1 === targetUser.id && f.userId2 === userId)
@@ -2517,27 +2552,92 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         return jsonResponse({ error: "你們已經是好友囉！" }, 400);
       }
 
-      friendships.push({ userId1: userId, userId2: targetUser.id });
-      await setDbKey("friendships", friendships);
+      const friendRequests = await getDbKey("friend_requests") || [];
+      const hasPending = friendRequests.some(
+        (r: any) => (r.sender_id === userId && r.receiver_id === targetUser.id && r.status === "pending")
+      );
+      if (hasPending) {
+        return jsonResponse({ error: "您已對此用戶發送過好友申請，請靜候對方同意 ⏱️" }, 400);
+      }
 
-      // Reward
-      const u1Idx = users.findIndex((u: any) => u.id === userId);
-      const u2Idx = users.findIndex((u: any) => u.id === targetUser.id);
-      if (u1Idx !== -1) users[u1Idx].star_coins = (users[u1Idx].star_coins || 0) + 30;
-      if (u2Idx !== -1) users[u2Idx].star_coins = (users[u2Idx].star_coins || 0) + 30;
-      await setDbKey("users", users);
+      // Check if target has sent us a pending request
+      const hasIncomingPending = friendRequests.find(
+        (r: any) => (r.sender_id === targetUser.id && r.receiver_id === userId && r.status === "pending")
+      );
+      if (hasIncomingPending) {
+        hasIncomingPending.status = "accepted";
+        friendships.push({ userId1: userId, userId2: targetUser.id });
+        await setDbKey("friendships", friendships);
+        await setDbKey("friend_requests", friendRequests);
+        return jsonResponse({
+          success: true,
+          friend: { id: targetUser.id, username: targetUser.username, avatar: targetUser.avatar },
+          message: `對方剛好也邀請了你！你們立即成為了好友 🌸`
+        });
+      }
+
+      const newRequest = {
+        id: `req_${Date.now()}`,
+        sender_id: userId,
+        sender_username: users.find((u: any) => u.id === userId)?.username || "神秘玩家",
+        sender_avatar: users.find((u: any) => u.id === userId)?.avatar || "",
+        receiver_id: targetUser.id,
+        status: "pending",
+        created_at: new Date().toISOString()
+      };
+      friendRequests.push(newRequest);
+      await setDbKey("friend_requests", friendRequests);
 
       return jsonResponse({
         success: true,
-        friend: { id: targetUser.id, username: targetUser.username, avatar: targetUser.avatar },
-        message: `成功添加 ${targetUser.username} 為好友！雙方各獲得 30 星星幣 🪙！`
+        message: `好友申請已發送給 ${targetUser.username}！請等待對方同意。`
       });
+    }
+
+    // GET /api/friends/requests/:userId
+    if (pathParts[0] === "friends" && pathParts[1] === "requests" && method === "GET") {
+      const userId = pathParts[2];
+      const friendRequests = await getDbKey("friend_requests") || [];
+      const pending = friendRequests.filter((r: any) => r.receiver_id === userId && r.status === "pending");
+      return jsonResponse(pending);
+    }
+
+    // POST /api/friends/requests/respond
+    if (pathParts[0] === "friends" && pathParts[1] === "requests" && pathParts[2] === "respond" && method === "POST") {
+      const { requestId, action } = body || {};
+      if (!requestId || !action) {
+        return jsonResponse({ error: "缺少參數" }, 400);
+      }
+      const friendRequests = await getDbKey("friend_requests") || [];
+      const idx = friendRequests.findIndex((r: any) => r.id === requestId);
+      if (idx === -1) {
+        return jsonResponse({ error: "找不到該好友邀請" }, 404);
+      }
+      const req = friendRequests[idx];
+      if (action === "accept") {
+        req.status = "accepted";
+        const friendships = await getDbKey("friendships") || [];
+        const alreadyFriends = friendships.some(
+          (f: any) => (f.userId1 === req.sender_id && f.userId2 === req.receiver_id) ||
+                      (f.userId1 === req.receiver_id && f.userId2 === req.sender_id)
+        );
+        if (!alreadyFriends) {
+          friendships.push({ userId1: req.sender_id, userId2: req.receiver_id });
+          await setDbKey("friendships", friendships);
+        }
+        await setDbKey("friend_requests", friendRequests);
+        return jsonResponse({ success: true, message: "已同意好友邀請！你們現在是好友囉 🌸" });
+      } else {
+        req.status = "declined";
+        await setDbKey("friend_requests", friendRequests);
+        return jsonResponse({ success: true, message: "已拒絕好友邀請" });
+      }
     }
 
     // 20. GET /api/friends/:userId
     if (pathParts[0] === "friends" && method === "GET") {
       const userId = pathParts[1];
-      const friendships = await getDbKey("friendships");
+      const friendships = await getDbKey("friendships") || [];
       const friendIds = friendships
         .filter((f: any) => f.userId1 === userId || f.userId2 === userId)
         .map((f: any) => f.userId1 === userId ? f.userId2 : f.userId1);
@@ -2559,17 +2659,15 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         return jsonResponse({ error: "找不到該用戶" }, 404);
       }
 
-      sender.star_coins = (sender.star_coins || 0) + 15;
-      receiver.star_coins = (receiver.star_coins || 0) + 30;
-
-      await setDbKey("users", users);
+      // NO star_coins rewarding here! Keep interaction visual effect only.
       return jsonResponse({
         success: true,
-        message: `✨ 你與 ${receiver.username} 互動了！你獲得了 15 星星幣 🪙，${receiver.username} 獲得了 30 星星幣 🪙！`,
+        message: `✨ 你與 ${receiver.username} 進行了星光互動！心中暖暖的 🌸`,
         sender_coins: sender.star_coins,
         receiver_coins: receiver.star_coins
       });
     }
+
 
     // 22. GET /api/friends/snaps
     if (pathParts[0] === "friends" && pathParts[1] === "snaps" && method === "GET") {
@@ -2602,9 +2700,11 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       const senderUser = users.find((u: any) => u.id === senderId);
       let receiverName = "";
       
-      if (receiverId.startsWith("group_")) {
-        const coparentGroups = await getDbKey("coparent_groups");
-        const realGroupId = receiverId.replace("group_", "");
+      const isGroup = receiverId.startsWith("group_");
+      const realGroupId = isGroup ? receiverId.replace("group_", "") : receiverId;
+
+      if (isGroup) {
+        const coparentGroups = await getDbKey("coparent_groups") || [];
         const group = coparentGroups.find((g: any) => g.id === realGroupId);
         receiverName = group?.name || "共同家庭";
       } else {
@@ -2616,19 +2716,20 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         return jsonResponse({ error: "找不到該用戶" }, 404);
       }
 
-      const friendSnaps = await getDbKey("friend_snaps");
-      const userSnaps = friendSnaps.filter((s: any) => s.senderId === senderId && s.receiverId === receiverId);
-      if (userSnaps.length > 0) {
-        userSnaps.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        const lastSnap = userSnaps[0];
-        const lastTime = new Date(lastSnap.timestamp).getTime();
-        const now = Date.now();
-        const oneHourMs = 60 * 60 * 1000;
-        if (now - lastTime < oneHourMs) {
-          const remainingMs = oneHourMs - (now - lastTime);
-          const remainingMin = Math.ceil(remainingMs / 60000);
-          return jsonResponse({ error: `拍照/上傳冷卻中！與該好友每小時限互傳一張相片，還需要等待 ${remainingMin} 分鐘 ⏱️` }, 400);
-        }
+      // Check per-friend-pair or per-recipient cooldown using photo_cooldowns table
+      const photoCooldowns = await getDbKey("photo_cooldowns") || [];
+      const now = Date.now();
+      const oneHourMs = 60 * 60 * 1000;
+
+      const activeCooldown = photoCooldowns.find(
+        (c: any) => c.sender_id === senderId && c.receiver_id === receiverId && (now - new Date(c.last_sent_time).getTime() < oneHourMs)
+      );
+
+      if (activeCooldown) {
+        const lastTime = new Date(activeCooldown.last_sent_time).getTime();
+        const remainingMs = oneHourMs - (now - lastTime);
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        return jsonResponse({ error: `拍照/上傳冷卻中！與該對象每小時限發送一張相片，還需要等待 ${remainingMin} 分鐘 ⏱️` }, 400);
       }
 
       const imgUrl = await uploadBase64ToStorage(imageUrl);
@@ -2643,31 +2744,44 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         timestamp: new Date().toISOString()
       };
 
+      const friendSnaps = await getDbKey("friend_snaps") || [];
       friendSnaps.unshift(newSnap);
       await setDbKey("friend_snaps", friendSnaps);
 
-      // Save also to posts_photos (the Supabase plog area) with category 'FriendSnap'
-      const postsPhotos = await getDbKey("posts_photos");
-      postsPhotos.push({
-        id: `photo_snap_${Date.now()}`,
-        user_id: senderId,
-        username: senderUser.username,
-        status: "approved",
-        created_at: new Date().toISOString(),
-        title: caption || "與好友互傳照片 🌸",
-        image_url: imgUrl,
-        year: String(new Date().getFullYear()),
-        category: "FriendSnap"
-      });
-      await setDbKey("posts_photos", postsPhotos);
+      // Save to group's photo wall if receiver is a co-parenting room
+      if (isGroup) {
+        const coparentGroups = await getDbKey("coparent_groups") || [];
+        const idx = coparentGroups.findIndex((g: any) => g.id === realGroupId);
+        if (idx !== -1) {
+          const group = coparentGroups[idx];
+          if (!group.photos) group.photos = [];
+          group.photos.unshift({
+            id: `photo_${Date.now()}`,
+            senderId,
+            senderName: senderUser.username,
+            imageUrl: imgUrl,
+            caption: caption || "✨ 跟你分享這張超級可愛的照片！📸",
+            timestamp: new Date().toISOString()
+          });
+          await setDbKey("coparent_groups", coparentGroups);
+        }
+      }
 
-      senderUser.star_coins = (senderUser.star_coins || 0) + 50;
-      await setDbKey("users", users);
+      // Update cooldown record
+      const updatedCooldowns = photoCooldowns.filter(
+        (c: any) => !(c.sender_id === senderId && c.receiver_id === receiverId)
+      );
+      updatedCooldowns.push({
+        sender_id: senderId,
+        receiver_id: receiverId,
+        last_sent_time: new Date().toISOString()
+      });
+      await setDbKey("photo_cooldowns", updatedCooldowns);
 
       return jsonResponse({
         success: true,
         snap: newSnap,
-        message: `✨ 照片成功發送給 ${receiverName}！你獲得了 50 星星幣 🪙！`
+        message: `✨ 照片成功發送給 ${receiverName}！`
       });
     }
 
@@ -2745,46 +2859,30 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         (item: any) => item.userId === userId && new Date(item.timestamp).getTime() > todayStart.getTime()
       );
 
-      let coinsEarned = 0;
       let statusMessage = "";
 
       if (timeDiffSec < 6) {
-        coinsEarned = 1;
-        statusMessage = `⏱️ 互動太頻繁囉！(距離上次陪伴僅隔了 ${Math.round(timeDiffSec)} 秒) 小萌星害羞了，本次獲得象徵性的 1 星星幣 🪙。試試看每隔一會再輕輕撫摸牠吧！`;
+        statusMessage = `⏱️ 陪伴太頻繁囉！(距離上次陪伴僅隔了 ${Math.round(timeDiffSec)} 秒) 小萌星害羞了。試試看每隔一會再輕輕撫摸牠吧！🌸`;
       } else if (timeDiffSec < 30) {
-        coinsEarned = 6;
-        statusMessage = `🌸 溫馨陪伴中！(距離上次陪伴隔了 ${Math.round(timeDiffSec)} 秒) 寵物對你感到熟悉了，恭喜獲得 +6 星星幣 🪙！`;
+        statusMessage = `🌸 溫馨陪伴中！你溫柔地撫摸了小星寵，牠發出舒服的呼嚕聲，好感度上升！✨`;
       } else {
-        coinsEarned = 16;
-        statusMessage = `✨ 深度陪伴獎勵！(距離上次陪伴已過 ${Math.round(timeDiffSec)} 秒) 你在好友家園細心照料小星寵，獲得最高規格 of +16 星星幣 🪙！`;
+        statusMessage = `✨ 深度陪伴中！你在好友家園細心照料小星寵，牠開心地圍著你轉圈，對你無比喜愛！💖`;
       }
-
-      if (todayInteractions.length >= 20) {
-        coinsEarned = 1;
-        statusMessage = `🏆 達今日每日互動上限！您的每日關懷愛心已滿，本次互動僅獲得 1 星星幣 🪙。星寵們為您的溫暖深深感動！`;
-      }
-
-      visitor.star_coins = (visitor.star_coins || 0) + coinsEarned;
-      await setDbKey("users", users);
 
       let targetOwnerName = "";
       if (isGroup) {
-        const coparentGroups = await getDbKey("coparent_groups");
+        const coparentGroups = await getDbKey("coparent_groups") || [];
         const idx = coparentGroups.findIndex((g: any) => g.id === targetId);
         if (idx !== -1) {
-          coparentGroups[idx].star_coins = (coparentGroups[idx].star_coins || 0) + 5;
           targetOwnerName = `共同家庭【${coparentGroups[idx].name}】`;
-          await setDbKey("coparent_groups", coparentGroups);
         }
       } else {
-        const pets = await getDbKey("pets");
+        const pets = await getDbKey("pets") || [];
         const targetPet = pets.find((p: any) => p.id === targetId || p.owner_id === targetId);
         if (targetPet) {
           const ownerIdx = users.findIndex((u: any) => u.id === targetPet.owner_id);
           if (ownerIdx !== -1) {
-            users[ownerIdx].star_coins = (users[ownerIdx].star_coins || 0) + 5;
             targetOwnerName = users[ownerIdx].username;
-            await setDbKey("users", users);
           }
         }
       }
@@ -2799,11 +2897,11 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
       return jsonResponse({
         success: true,
-        coinsEarned,
+        coinsEarned: 0,
         message: statusMessage,
         visitorCoins: visitor.star_coins,
         targetOwner: targetOwnerName,
-        giftCoins: 5
+        giftCoins: 0
       });
     }
 
@@ -2849,6 +2947,109 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         if (!g.focusedPetId) g.focusedPetId = "star";
       });
       return jsonResponse(userGroups);
+    }
+
+    // POST /api/coparent/invite
+    if (pathParts[0] === "coparent" && pathParts[1] === "invite" && method === "POST") {
+      const { senderId, receiverId, roomName } = body || {};
+      if (!senderId || !receiverId || !roomName) {
+        return jsonResponse({ error: "缺少參數" }, 400);
+      }
+      const users = await getDbKey("users") || [];
+      const sender = users.find((u: any) => u.id === senderId);
+      const receiver = users.find((u: any) => u.id === receiverId);
+      if (!sender || !receiver) {
+        return jsonResponse({ error: "找不到用戶" }, 404);
+      }
+
+      const coparentInvitations = await getDbKey("coparent_invitations") || [];
+      const hasPending = coparentInvitations.some(
+        (i: any) => i.sender_id === senderId && i.receiver_id === receiverId && i.status === "pending"
+      );
+      if (hasPending) {
+        return jsonResponse({ error: "您已對該好友發送過共同飼養邀請，請靜候對方同意 ⏱️" }, 400);
+      }
+
+      const newInvite = {
+        id: `cop_invite_${Date.now()}`,
+        sender_id: senderId,
+        sender_username: sender.username,
+        sender_avatar: sender.avatar,
+        receiver_id: receiverId,
+        room_name: roomName,
+        status: "pending",
+        created_at: new Date().toISOString()
+      };
+      coparentInvitations.push(newInvite);
+      await setDbKey("coparent_invitations", coparentInvitations);
+
+      return jsonResponse({ success: true, message: `已成功發送共同飼養邀請給 ${receiver.username}！` });
+    }
+
+    // GET /api/coparent/invites/:userId
+    if (pathParts[0] === "coparent" && pathParts[1] === "invites" && method === "GET") {
+      const userId = pathParts[2];
+      const coparentInvitations = await getDbKey("coparent_invitations") || [];
+      const pending = coparentInvitations.filter((i: any) => i.receiver_id === userId && i.status === "pending");
+      return jsonResponse(pending);
+    }
+
+    // POST /api/coparent/invites/respond
+    if (pathParts[0] === "coparent" && pathParts[1] === "invites" && pathParts[2] === "respond" && method === "POST") {
+      const { inviteId, action } = body || {};
+      if (!inviteId || !action) {
+        return jsonResponse({ error: "缺少參數" }, 400);
+      }
+      const coparentInvitations = await getDbKey("coparent_invitations") || [];
+      const idx = coparentInvitations.findIndex((i: any) => i.id === inviteId);
+      if (idx === -1) {
+        return jsonResponse({ error: "找不到該共同飼養邀請" }, 404);
+      }
+      const inv = coparentInvitations[idx];
+      if (action === "accept") {
+        inv.status = "accepted";
+        
+        // Create the group
+        const coparentGroups = await getDbKey("coparent_groups") || [];
+        const newGroup = {
+          id: `group_${Date.now()}`,
+          name: inv.room_name,
+          member_ids: [inv.sender_id, inv.receiver_id],
+          star_coins: 100,
+          pet: {
+            name: "蜜桃粉萌星",
+            fullness: 50,
+            love: 50,
+            furniture: []
+          },
+          pets_v2: [
+            {
+              id: "star",
+              species: "star",
+              name: "蜜桃粉萌星",
+              level: 1,
+              exp: 0,
+              fullness: 50,
+              love: 50,
+              customSkin: "",
+              currentHome: "home_star"
+            }
+          ],
+          currentHomeId: "home_star",
+          focusedPetId: "star",
+          refrigerator_food: {},
+          photos: []
+        };
+        coparentGroups.push(newGroup);
+        await setDbKey("coparent_groups", coparentGroups);
+        await setDbKey("coparent_invitations", coparentInvitations);
+
+        return jsonResponse({ success: true, message: `成功接受邀請！「${inv.room_name}」已成功建立 🏡！` });
+      } else {
+        inv.status = "declined";
+        await setDbKey("coparent_invitations", coparentInvitations);
+        return jsonResponse({ success: true, message: "已拒絕共同飼養邀請" });
+      }
     }
 
     // 28. POST /api/coparent/create

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Sparkles, Music, Heart, Smile, Star, Send, Edit2, Check, 
   RefreshCw, HelpCircle, Users, Image, Camera, Lock, UserPlus, 
-  Coins, Plus, CheckCircle, Info, ChevronRight, X
+  Coins, Plus, CheckCircle, Info, ChevronRight, X, Bell
 } from "lucide-react";
 import { User } from "../types";
 import PetsCanvasBoard from "./PetsCanvasBoard";
@@ -709,6 +709,8 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
   const [coparentGroups, setCoparentGroups] = useState<any[]>([]);
   const [activeGroup, setActiveGroup] = useState<any | null>(null);
   const [friends, setFriends] = useState<any[]>([]);
+  const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [coparentInvitations, setCoparentInvitations] = useState<any[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [selectedFriendsForGroup, setSelectedFriendsForGroup] = useState<string[]>([]);
@@ -1238,18 +1240,22 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
         throw new Error("無法載入好友的家園資訊");
       }
       const data = await res.json();
-      setVisitingFriend(data.friend);
-      setVisitedPet(data.pet);
-      setVisitedCoparentGroups(data.coparentGroups || []);
-      
-      // Reset visited room sub-states
-      setIsVisitingGroup(false);
-      setSelectedVisitedGroup(null);
-      setVisitedGroupMembers([{ id: data.friend.id, username: data.friend.username, avatar: data.friend.avatar }]);
-      
-      setActiveTab("friend");
-      setBubbleText(`✨ 歡迎參觀 ${data.friend.username} 的星空萌寵屋！快戳一戳星寵與牠互動、並贈予溫暖與陪伴吧！🌸`);
-      setInteractionRewardMsg("");
+      if (data && data.friend) {
+        setVisitingFriend(data.friend);
+        setVisitedPet(data.pet);
+        setVisitedCoparentGroups(data.coparentGroups || []);
+        
+        // Reset visited room sub-states
+        setIsVisitingGroup(false);
+        setSelectedVisitedGroup(null);
+        setVisitedGroupMembers([{ id: data.friend.id, username: data.friend.username, avatar: data.friend.avatar }]);
+        
+        setActiveTab("friend");
+        setBubbleText(`✨ 歡迎參觀 ${data.friend.username} 的星空萌寵屋！快戳一戳星寵與牠互動、並贈予溫暖與陪伴吧！🌸`);
+        setInteractionRewardMsg("");
+      } else {
+        throw new Error("無法解析好友的家園資訊");
+      }
     } catch (err: any) {
       alert(err.message || "載入好友家園失敗");
     }
@@ -1315,6 +1321,20 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
         const snapsData = await resSnaps.json();
         setFriendSnaps(snapsData);
       }
+
+      // Fetch friend requests
+      const resRequests = await fetch(`/api/friends/requests/${currentUser.id}`);
+      if (resRequests.ok) {
+        const reqData = await resRequests.json();
+        setFriendRequests(reqData);
+      }
+
+      // Fetch coparent invitations
+      const resInvites = await fetch(`/api/coparent/invites/${currentUser.id}`);
+      if (resInvites.ok) {
+        const invData = await resInvites.json();
+        setCoparentInvitations(invData);
+      }
     } catch (e) {
       console.error("Error loading coparent data:", e);
     }
@@ -1371,7 +1391,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
       });
       const data = await res.json();
       if (res.ok) {
-        setFriendAddStatus({ success: true, error: "", message: `成功添加 ${data.friend.username} 為好友！🌸` });
+        setFriendAddStatus({ success: true, error: "", message: `成功發送好友邀請！請靜待對方同意 🌸` });
         setFriendSearch("");
         fetchCoparentData();
       } else {
@@ -1382,38 +1402,77 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
     }
   };
 
+  const handleRespondFriendRequest = async (requestId: string, action: "accept" | "decline") => {
+    try {
+      const res = await fetch("/api/friends/requests/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, action })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || "處理成功！");
+        fetchCoparentData();
+      } else {
+        alert(data.error || "處理失敗");
+      }
+    } catch (e) {
+      alert("網路連線異常");
+    }
+  };
+
+  const handleRespondCoparentInvitation = async (inviteId: string, action: "accept" | "decline") => {
+    try {
+      const res = await fetch("/api/coparent/invites/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId, action })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || "處理成功！");
+        fetchCoparentData();
+      } else {
+        alert(data.error || "處理失敗");
+      }
+    } catch (e) {
+      alert("網路連線異常");
+    }
+  };
+
   const handleCreateGroup = async () => {
     if (!currentUser || !newGroupName.trim()) return;
     if (selectedFriendsForGroup.length === 0) {
-      alert("請至少選擇 1 位好友共同飼養喔！(總人數 2～6 人)");
+      alert("請至少選擇 1 位好友發送共同飼養邀請喔！");
       return;
     }
 
     try {
-      const res = await fetch("/api/coparent/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newGroupName.trim(),
-          creatorId: currentUser.id,
-          memberIds: selectedFriendsForGroup
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNewGroupName("");
-        setSelectedFriendsForGroup([]);
-        setIsCreatingGroup(false);
-        fetchCoparentData();
-        setActiveTab("coparent");
-        // Select newly created group
-        setActiveGroup(data.group);
-      } else {
-        const err = await res.json();
-        alert(err.error || "創建家庭失敗");
+      // Send invite for each selected friend
+      for (const friendId of selectedFriendsForGroup) {
+        const res = await fetch("/api/coparent/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            senderId: currentUser.id,
+            receiverId: friendId,
+            roomName: newGroupName.trim()
+          })
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          alert(`邀請好友失敗: ${data.error || "未知錯誤"}`);
+          return;
+        }
       }
+
+      alert("🎉 共同飼養邀請已成功發送！當好友在通知中心接受您的邀請後，共同小屋就會立即建立囉 🏡！");
+      setNewGroupName("");
+      setSelectedFriendsForGroup([]);
+      setIsCreatingGroup(false);
+      fetchCoparentData();
     } catch (e) {
-      alert("創立失敗");
+      alert("連線發送邀請異常，請重試");
     }
   };
 
@@ -3336,68 +3395,27 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                 <div className="bg-white/60 border border-[#FF799C]/15 rounded-2xl p-4 space-y-3.5">
                   <div className="flex justify-between items-center border-b border-[#FF799C]/10 pb-2">
                     <h3 className="text-xs font-bold text-[#6E4B55] flex items-center gap-1.5">
-                      <Camera className="text-[#FF799C] h-4.5 w-4.5" /> 每小時傳照片得星星幣任務 🪙
+                      <Camera className="text-[#FF799C] h-4.5 w-4.5" /> 📸 共同家園專屬拍立得牆
                     </h3>
-                    {photoShareCooldown > 0 ? (
-                      <span className="text-[9px] font-mono text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                        ⏱️ 倒數：{Math.floor(photoShareCooldown / 60)}分{photoShareCooldown % 60}秒
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 animate-pulse">
-                        ✅ 任務可領取
-                      </span>
-                    )}
                   </div>
 
-                  {isSharingPhoto ? (
-                    <form onSubmit={handlePhotoShareSubmit} className="space-y-2.5 text-xs bg-white/80 p-3 rounded-xl border border-[#FF799C]/10">
-                      <div>
-                        <label className="block text-[9px] font-bold text-gray-500 mb-1">📸 照片 URL (留空將隨機推薦一張星光拍立得)：</label>
-                        <input
-                          type="text"
-                          placeholder="請輸入照片的圖片網址..."
-                          value={photoUrlInput}
-                          onChange={(e) => setPhotoUrlInput(e.target.value)}
-                          className="w-full bg-white border border-[#FF799C]/20 rounded-lg p-1.5 focus:outline-none focus:border-[#FF799C] text-[#6E4B55] text-[10px]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold text-gray-500 mb-1">💬 給夥伴們的話：</label>
-                        <input
-                          type="text"
-                          placeholder="例如：小星寵今天看起來很乖耶！🌸"
-                          value={photoCaptionInput}
-                          onChange={(e) => setPhotoCaptionInput(e.target.value)}
-                          className="w-full bg-white border border-[#FF799C]/20 rounded-lg p-1.5 focus:outline-none focus:border-[#FF799C] text-[#6E4B55] text-[10px]"
-                        />
-                      </div>
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setIsSharingPhoto(false)}
-                          className="bg-gray-100 text-gray-600 px-3 py-1 rounded-lg"
-                        >
-                          取消
-                        </button>
-                        <button
-                          type="submit"
-                          className="bg-[#FF799C] text-white px-3 py-1 rounded-lg hover:bg-[#FF799C]/90"
-                        >
-                          分享並領取 +50 🪙
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div className="flex justify-center">
-                      <button
-                        disabled={photoShareCooldown > 0}
-                        onClick={() => setIsSharingPhoto(true)}
-                        className={`w-full py-2.5 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${photoShareCooldown > 0 ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed" : "bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] text-white hover:opacity-95"}`}
-                      >
-                        <Camera className="h-4 w-4" /> 上傳照片打卡 (每小時領取 +50 星星幣)
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => {
+                        setSelectedFriendForSnap({
+                          id: `group_${activeGroup.id}`,
+                          username: activeGroup.name
+                        });
+                        setSnapCaption("");
+                        setUploadedSnapBase64("");
+                        setSnapMessage("");
+                        setSnapError("");
+                      }}
+                      className="w-full py-2.5 rounded-xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm bg-gradient-to-r from-purple-500 to-[#FF799C] text-white hover:opacity-95 active:scale-95 cursor-pointer"
+                    >
+                      <Camera className="h-4 w-4" /> 拍攝拍立得相片發布至本房間 📸
+                    </button>
+                  </div>
 
                   {/* PHOTO FEED ALBUM */}
                   <div className="space-y-2">
@@ -3406,18 +3424,22 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                     </h4>
                     
                     <div className="flex gap-3 overflow-x-auto pb-2 pt-1 max-w-full">
-                      {activeGroup.photos?.map((p: any) => (
-                        <div key={p.id} className="bg-white p-2 rounded-xl border border-[#FF799C]/10 shadow-sm shrink-0 w-[140px] text-center">
-                          <div className="h-20 w-full overflow-hidden rounded-lg bg-gray-50 border border-gray-100">
-                            <img src={p.image_url || undefined} alt="Shared snap" className="h-full w-full object-cover" />
+                      {activeGroup.photos && activeGroup.photos.length > 0 ? (
+                        activeGroup.photos.map((p: any) => (
+                          <div key={p.id} className="bg-white p-2 rounded-xl border border-[#FF799C]/10 shadow-sm shrink-0 w-[140px] text-center">
+                            <div className="h-20 w-full overflow-hidden rounded-lg bg-gray-50 border border-gray-100">
+                              <img src={p.imageUrl || p.image_url || undefined} alt="Shared snap" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                            </div>
+                            <p className="text-[10px] font-bold text-[#FF799C] truncate mt-1.5">{p.senderName || p.username || "家長"}</p>
+                            <p className="text-[8px] text-gray-500 truncate">{p.caption}</p>
+                            <span className="text-[7px] text-gray-400 block mt-0.5 leading-none">
+                              {new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
-                          <p className="text-[10px] font-bold text-[#FF799C] truncate mt-1.5">{p.username}</p>
-                          <p className="text-[8px] text-gray-500 truncate">{p.caption}</p>
-                          <span className="text-[7px] text-gray-400 block mt-0.5 leading-none">
-                            {new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      ))}
+                        ))
+                      ) : (
+                        <p className="text-[9px] text-gray-400 italic">目前房間照片牆空空如也，快點擊上方按鈕記錄下萌星的第一張照片吧！🌸</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3425,6 +3447,85 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
 
               {/* FRIEND SYSTEM MANAGER */}
               <div className="bg-white/60 border border-[#FF799C]/15 rounded-2xl p-4 space-y-3">
+                {/* 🔔 通知與邀請中心 🔔 */}
+                {(friendRequests.length > 0 || coparentInvitations.length > 0) && (
+                  <div className="bg-gradient-to-br from-pink-50 to-[#FFF0F3] border-2 border-[#FF799C]/25 rounded-2xl p-4 space-y-3 shadow-sm animate-pulse mb-2 text-left">
+                    <h3 className="text-xs font-bold text-[#FF799C] flex items-center gap-1.5">
+                      <Bell className="h-4.5 w-4.5 text-[#FF799C]" />
+                      <span>🔔 萌友通知中心 ({friendRequests.length + coparentInvitations.length})</span>
+                    </h3>
+                    
+                    {/* Friend Requests */}
+                    {friendRequests.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-gray-500">👋 好友添加請求：</p>
+                        <div className="space-y-1.5">
+                          {friendRequests.map((req: any) => (
+                            <div key={req.id} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-[#FF799C]/15 shadow-sm gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <img src={req.sender_avatar || undefined} alt="Avatar" className="w-6 h-6 rounded-full border border-[#FF799C]/10 shrink-0" referrerPolicy="no-referrer" />
+                                <span className="text-[10px] text-gray-700 font-bold truncate">{req.sender_username} 邀請您加為好友 🌸</span>
+                              </div>
+                              <div className="flex gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRespondFriendRequest(req.id, "accept")}
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-white text-[8px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 cursor-pointer"
+                                >
+                                  同意
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRespondFriendRequest(req.id, "decline")}
+                                  className="bg-gray-400 hover:bg-gray-500 text-white text-[8px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 cursor-pointer"
+                                >
+                                  拒絕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Co-parenting Invitations */}
+                    {coparentInvitations.length > 0 && (
+                      <div className={`space-y-2 ${friendRequests.length > 0 ? "pt-2.5 border-t border-[#FF799C]/10" : ""}`}>
+                        <p className="text-[10px] font-bold text-gray-500">🏡 共同飼養邀請：</p>
+                        <div className="space-y-1.5">
+                          {coparentInvitations.map((inv: any) => (
+                            <div key={inv.id} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-[#FF799C]/15 shadow-sm gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <img src={inv.sender_avatar || undefined} alt="Avatar" className="w-6 h-6 rounded-full border border-[#FF799C]/10 shrink-0" referrerPolicy="no-referrer" />
+                                <div className="flex flex-col text-left min-w-0">
+                                  <span className="text-[10px] text-gray-700 font-bold truncate">{inv.sender_username} 邀請您共同飼養 🐾</span>
+                                  <span className="text-[8px] text-gray-400 truncate">房間名稱: {inv.room_name}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRespondCoparentInvitation(inv.id, "accept")}
+                                  className="bg-[#FF799C] hover:bg-[#FF799C]/90 text-white text-[8px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 cursor-pointer"
+                                >
+                                  同意並建立小屋
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRespondCoparentInvitation(inv.id, "decline")}
+                                  className="bg-gray-400 hover:bg-gray-500 text-white text-[8px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 cursor-pointer"
+                                >
+                                  拒絕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <h3 className="text-xs font-bold text-[#6E4B55] flex items-center gap-1">
                   <UserPlus className="h-4.5 w-4.5 text-[#FF799C]" /> 找尋玩家添加好友
                 </h3>
@@ -3953,6 +4054,7 @@ export default function PetsModule({ currentUser, onRefreshData }: PetsModulePro
                       if (res.ok) {
                         setSnapMessage(data.message || "✨ 發送成功！");
                         if (onRefreshData) onRefreshData();
+                        fetchCoparentData();
                         
                         // Fetch snaps right away to refresh the UI
                         const resSnaps = await fetch(`/api/friends/snaps?userId=${currentUser.id}`);

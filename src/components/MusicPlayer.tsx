@@ -265,7 +265,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   const [customCategory, setCustomCategory] = useState("");
   const [customCategories, setCustomCategories] = useState<string[]>([]);
 
-  const musicCategories = ["All", "General", ...customCategories];
+  const musicCategories = Array.from(new Set(["All", "General", ...customCategories]));
   const filteredTracks = tracks.filter((t) => {
     if (selectedCategory === "All") return true;
     return t.category === selectedCategory;

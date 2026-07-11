@@ -2678,12 +2678,12 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       if (!userId) {
         return jsonResponse({ error: "缺少 userId" }, 400);
       }
-      const coparentGroups = await getDbKey("coparent_groups");
+      const coparentGroups = (await getDbKey("coparent_groups")) || [];
       const userGroupIds = coparentGroups
         .filter((g: any) => g.member_ids && g.member_ids.includes(userId))
-        .map((g: any) => `group_${g.id}`);
+        .map((g: any) => (g.id && g.id.startsWith("group_") ? g.id : `group_${g.id}`));
 
-      const friendSnaps = await getDbKey("friend_snaps");
+      const friendSnaps = (await getDbKey("friend_snaps")) || [];
       const snaps = friendSnaps.filter(
         (s: any) => s.senderId === userId || s.receiverId === userId || userGroupIds.includes(s.receiverId)
       );
@@ -2706,7 +2706,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
 
       if (isGroup) {
         const coparentGroups = await getDbKey("coparent_groups") || [];
-        const group = coparentGroups.find((g: any) => g.id === realGroupId);
+        const group = coparentGroups.find((g: any) => g.id === receiverId || g.id === realGroupId || g.id === `group_${realGroupId}`);
         receiverName = group?.name || "共同家庭";
       } else {
         const receiverUser = users.find((u: any) => u.id === receiverId);
@@ -2752,7 +2752,7 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
       // Save to group's photo wall if receiver is a co-parenting room
       if (isGroup) {
         const coparentGroups = await getDbKey("coparent_groups") || [];
-        const idx = coparentGroups.findIndex((g: any) => g.id === realGroupId);
+        const idx = coparentGroups.findIndex((g: any) => g.id === receiverId || g.id === realGroupId || g.id === `group_${realGroupId}`);
         if (idx !== -1) {
           const group = coparentGroups[idx];
           if (!group.photos) group.photos = [];
@@ -3311,12 +3311,13 @@ export async function handleSupabaseApiCall(url: string, init?: RequestInit): Pr
         if (!group.photos) group.photos = [];
         group.photos.unshift(newPhoto);
 
-        const friendSnaps = await getDbKey("friend_snaps");
+        const friendSnaps = await getDbKey("friend_snaps") || [];
+        const groupReceiverId = group.id.startsWith("group_") ? group.id : `group_${group.id}`;
         friendSnaps.unshift({
           id: newPhoto.id,
           senderId: userId,
           senderName: userObj?.username || "成員",
-          receiverId: `group_${group.id}`,
+          receiverId: groupReceiverId,
           receiverName: group.name,
           imageUrl: imgUrl,
           caption: newPhoto.caption,

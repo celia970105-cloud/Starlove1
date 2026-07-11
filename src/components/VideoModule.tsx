@@ -106,7 +106,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
     reader.readAsDataURL(file);
   };
 
-  const categories = ["All", "Stage", "Vlog", "Teaser", "General", ...Array.from(new Set<string>([...customCategories, ...videos.map(v => v.category as string)])).filter((c): c is string => !!c && !["Stage", "Vlog", "Teaser", "General"].includes(c))];
+  const categories = ["All", "Stage", "Vlog", "Teaser", "General", ...Array.from(new Set<string>([...customCategories, ...videos.map(v => v.category as string)])).filter((c): c is string => !!c && !["All", "Stage", "Vlog", "Teaser", "General"].includes(c))];
   const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
   const [isPlayerPlaying, setIsPlayerPlaying] = useState(false);
 

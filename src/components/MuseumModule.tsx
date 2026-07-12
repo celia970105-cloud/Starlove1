@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ExternalLink, Maximize2, Palette, X, Plus, AlertCircle, Sparkles, Check } from "lucide-react";
+import { ExternalLink, Maximize2, Palette, X, Plus, AlertCircle, Sparkles, Check, RefreshCw } from "lucide-react";
 import { ArtworkPost, User } from "../types";
 import { compressImage } from "../lib/imageCompressor";
 
@@ -18,6 +18,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
 
   // Submissions state
   const [showForm, setShowForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [description, setDescription] = useState("");
@@ -97,6 +98,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setSubmitError("");
     setSubmitSuccess(false);
 
@@ -105,6 +107,7 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
@@ -153,6 +156,8 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
       }
     } catch (err) {
       setSubmitError("伺服器連線中斷。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -550,9 +555,17 @@ export default function MuseumModule({ currentUser, onRefreshData, globalRefresh
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95 cursor-pointer"
+                      disabled={isSubmitting}
+                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 disabled:opacity-50 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      遞交畫作
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>遞交中...</span>
+                        </>
+                      ) : (
+                        <span>遞交畫作</span>
+                      )}
                     </button>
                   </div>
                 </form>

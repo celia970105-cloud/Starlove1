@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, Eye, X, Mail, CheckCircle, AlertCircle, Heart, Star, Sparkles } from "lucide-react";
+import { Send, Eye, X, Mail, CheckCircle, AlertCircle, Heart, Star, Sparkles, RefreshCw } from "lucide-react";
 import { LetterPost, User } from "../types";
 
 interface LettersModuleProps {
@@ -17,6 +17,7 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
 
   // Write Letter Form State
   const [showWriteModal, setShowWriteModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [authorName, setAuthorName] = useState(currentUser?.username || "");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [content, setContent] = useState("");
@@ -110,6 +111,7 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setSubmitError("");
     setSubmitSuccess(false);
 
@@ -118,6 +120,7 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
@@ -165,6 +168,8 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
       }
     } catch (err) {
       setSubmitError("伺服器連線中斷。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -569,9 +574,17 @@ export default function LettersModule({ currentUser, onRefreshData, globalRefres
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95"
+                      disabled={isSubmitting}
+                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 disabled:opacity-50 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
                     >
-                      放進星星罐
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>投遞中...</span>
+                        </>
+                      ) : (
+                        <span>放進星星罐</span>
+                      )}
                     </button>
                   </div>
                 </form>

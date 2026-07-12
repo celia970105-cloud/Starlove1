@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Plus, Sparkles, AlertCircle, FileText, CheckCircle, Palette, Settings, Sliders, Eye, EyeOff, Check, Repeat, Shuffle } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Music, Volume2, Plus, Sparkles, AlertCircle, FileText, CheckCircle, Palette, Settings, Sliders, Eye, EyeOff, Check, Repeat, Shuffle, RefreshCw } from "lucide-react";
 import { MusicPost, User } from "../types";
 
 // Shared global audio engine to persist music across components and page switches
@@ -251,6 +251,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
 
   // Submission Form State
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newArtist, setNewArtist] = useState("");
   const [newAudioUrl, setNewAudioUrl] = useState("");
@@ -549,6 +550,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
   // Submit new music
   const handleSubmitMusic = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setSubmitError("");
     setSubmitSuccess(false);
 
@@ -576,6 +578,7 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
@@ -628,6 +631,8 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
       }
     } catch (err) {
       setSubmitError("伺服器連線出錯，請確認網路連線。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1343,9 +1348,17 @@ export default function MusicPlayer({ currentUser, onRefreshData, globalRefreshC
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95"
+                      disabled={isSubmitting}
+                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 disabled:opacity-50 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
                     >
-                      永久保存並投稿
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>上傳中...</span>
+                        </>
+                      ) : (
+                        <span>永久保存並投稿</span>
+                      )}
                     </button>
                   </div>
                 </form>

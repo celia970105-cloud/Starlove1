@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Video, Play, Pause, Plus, AlertCircle, Film, Sparkles, Check, Flame, Clock } from "lucide-react";
+import { Video, Play, Pause, Plus, AlertCircle, Film, Sparkles, Check, Flame, Clock, RefreshCw } from "lucide-react";
 import { VideoPost, User } from "../types";
 
 interface VideoModuleProps {
@@ -18,6 +18,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
 
   // Video Form State
   const [showForm, setShowForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [category, setCategory] = useState("Stage");
@@ -179,6 +180,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setSubmitError("");
     setSubmitSuccess(false);
 
@@ -187,6 +189,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const payload = {
         title,
@@ -232,6 +235,8 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
       }
     } catch (err) {
       setSubmitError("連線伺服器出錯。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -565,14 +570,23 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                     </button>
                     <button
                       type="submit"
-                      disabled={isReadingFile || !videoUrl}
-                      className={`flex-1 font-medium text-sm py-3 rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer ${
-                        isReadingFile || !videoUrl
+                      disabled={isReadingFile || isSubmitting || !videoUrl}
+                      className={`flex-1 font-medium text-sm py-3 rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
+                        isReadingFile || isSubmitting || !videoUrl
                           ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none"
                           : "bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white shadow-[#FF799C]/25"
                       }`}
                     >
-                      {isReadingFile ? "讀取中..." : "遞交影片"}
+                      {isReadingFile ? (
+                        "讀取中..."
+                      ) : isSubmitting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>上傳中...</span>
+                        </>
+                      ) : (
+                        "遞交影片"
+                      )}
                     </button>
                   </div>
                 </form>

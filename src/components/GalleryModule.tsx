@@ -22,6 +22,7 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
 
   // Form Submission State
   const [showForm, setShowForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
@@ -134,6 +135,7 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setSubmitError("");
     setSubmitSuccess(false);
 
@@ -147,6 +149,7 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const finalCategory = isCustomCategory ? (customCategory.trim() || "自定義") : category;
       const payload = {
@@ -194,6 +197,8 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
       }
     } catch (err) {
       setSubmitError("連線伺服器出錯。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -568,9 +573,17 @@ export default function GalleryModule({ currentUser, onRefreshData, globalRefres
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95"
+                      disabled={isSubmitting || isReadingFile}
+                      className="flex-1 bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] hover:opacity-90 disabled:opacity-50 text-white font-medium text-sm py-3 rounded-xl shadow-lg shadow-[#FF799C]/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
                     >
-                      送出投稿
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>上傳中...</span>
+                        </>
+                      ) : (
+                        <span>送出投稿</span>
+                      )}
                     </button>
                   </div>
                 </form>

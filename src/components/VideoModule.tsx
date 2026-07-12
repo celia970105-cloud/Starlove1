@@ -482,6 +482,39 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                     </div>
                   )}
 
+                  <div className="flex rounded-xl bg-[#FFF6F2] p-1 border border-[#FF799C]/15 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmissionType("file");
+                        setVideoUrl("");
+                        setSelectedFileName("");
+                      }}
+                      className={`flex-1 text-center py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        submissionType === "file"
+                          ? "bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] text-white shadow-sm"
+                          : "text-[#6E4B55]/60 hover:text-[#6E4B55]"
+                      }`}
+                    >
+                      本機影片上傳
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmissionType("url");
+                        setVideoUrl("");
+                        setSelectedFileName("");
+                      }}
+                      className={`flex-1 text-center py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        submissionType === "url"
+                          ? "bg-gradient-to-r from-[#FF799C] to-[#FFCCDD] text-white shadow-sm"
+                          : "text-[#6E4B55]/60 hover:text-[#6E4B55]"
+                      }`}
+                    >
+                      貼上外部影片網址
+                    </button>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">影片標題 *</label>
                     <input
@@ -494,35 +527,58 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">選擇手機相簿 / 本機影片 *</label>
-                    <div className="relative group">
-                      <input
-                        type="file"
-                        accept="video/*"
-                        id="video-upload-input"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="video-upload-input"
-                        className="flex flex-col items-center justify-center border-2 border-dashed border-[#FF799C]/35 hover:border-[#FF799C] bg-[#FFF6F2]/40 hover:bg-[#FFF6F2]/70 rounded-2xl py-6 px-4 text-center cursor-pointer transition-all duration-200"
-                      >
-                        <Film className="h-8 w-8 text-[#FF799C] mb-2 animate-pulse" />
-                        {selectedFileName ? (
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold text-[#FF799C] break-all">{selectedFileName}</p>
-                            <p className="text-[10px] text-gray-400">點擊此處重新選擇影片</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-[#6E4B55]/85">點擊選擇手機影片庫 / 媒體檔案</p>
-                            <p className="text-[9px] text-[#6E4B55]/50">支援 MP4, MOV, WebM 等格式，建議 100MB 以內</p>
-                          </div>
-                        )}
-                      </label>
+                  {submissionType === "file" ? (
+                    <div>
+                      <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">選擇手機相簿 / 本機影片 *</label>
+                      <div className="relative group">
+                        <input
+                          type="file"
+                          accept="video/*"
+                          id="video-upload-input"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="video-upload-input"
+                          className="flex flex-col items-center justify-center border-2 border-dashed border-[#FF799C]/35 hover:border-[#FF799C] bg-[#FFF6F2]/40 hover:bg-[#FFF6F2]/70 rounded-2xl py-6 px-4 text-center cursor-pointer transition-all duration-200"
+                        >
+                          <Film className="h-8 w-8 text-[#FF799C] mb-2 animate-pulse" />
+                          {selectedFileName ? (
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold text-[#FF799C] break-all">{selectedFileName}</p>
+                              <p className="text-[10px] text-gray-400">點擊此處重新選擇影片</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-[#6E4B55]/85">點擊選擇手機影片庫 / 媒體檔案</p>
+                              <p className="text-[9px] text-[#6E4B55]/50">支援 MP4, MOV, WebM 等格式，建議 100MB 以內</p>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-[#FF799C]/90 mt-1.5 leading-relaxed font-sans bg-[#FF799C]/5 p-2 rounded-lg border border-[#FF799C]/10">
+                        ⚠️ <strong>播放限制提示：</strong>由於瀏覽器和手機系統（特別是 iOS/Safari）的限制，本機上傳的大影片（如超過 20MB）在轉為 Base64 播放時極容易因記憶體不足而無法流暢播放或無法打開。若影片較大，<strong>強烈建議點擊上方切換為「貼上外部影片網址」投稿！</strong>
+                      </p>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-mono text-[#6E4B55]/70 mb-1.5">外部影片網址 *</label>
+                      <input
+                        type="url"
+                        required
+                        placeholder="請貼上 Bilibili (BV號)、YouTube 連結或 MP4 直鏈網址"
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        className="w-full bg-[#FFF6F2]/60 border border-[#FF799C]/20 focus:border-[#FF799C] focus:outline-none text-[#6E4B55] text-sm px-3.5 py-2.5 rounded-xl transition-all"
+                      />
+                      <p className="text-[10px] text-[#6E4B55]/70 mt-1.5 leading-relaxed font-sans bg-[#FFF6F2] p-2 rounded-lg border border-[#FF799C]/10">
+                        💡 <strong>支援連結格式：</strong><br />
+                        • <strong>Bilibili：</strong>例如 <code>https://www.bilibili.com/video/BVxxxxxx</code><br />
+                        • <strong>YouTube：</strong>例如 <code>https://www.youtube.com/watch?v=xxxxxx</code><br />
+                        • <strong>直鏈影片：</strong>以 <code>http(s)://</code> 開頭且以 <code>.mp4</code>/<code>.mov</code> 結尾的影片連結
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-3">
                     <div>

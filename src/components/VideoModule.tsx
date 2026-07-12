@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Video, Play, Pause, Plus, AlertCircle, Film, Sparkles, Check, Flame, Clock, RefreshCw } from "lucide-react";
+import { Video, Play, Pause, Plus, AlertCircle, Film, Sparkles, Check, Flame, Clock, RefreshCw, X } from "lucide-react";
 import { VideoPost, User } from "../types";
 
 interface VideoModuleProps {
@@ -81,8 +81,8 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit: e.g., 35MB
-    const limitMB = 35;
+    // Check size limit: 100MB
+    const limitMB = 100;
     if (file.size > limitMB * 1024 * 1024) {
       setSubmitError(`影片檔案大小不能超過 ${limitMB}MB，請選擇較小的應援短片。`);
       setSelectedFileName("");
@@ -130,7 +130,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
               const matched = data.find((v: any) => v.id === prev.id);
               if (matched) return matched;
             }
-            return data[0];
+            return null; // Do not automatically select/play the first video on initial load
           });
         }
       } else {
@@ -267,7 +267,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
         {/* Left column: Video player (8 cols) */}
         <div className="lg:col-span-8 space-y-4">
           <div className="relative aspect-video rounded-3xl overflow-hidden bg-black/60 border border-white/10 shadow-[0_0_50px_rgba(255,121,156,0.15)] group">
-            {activeVideo ? (
+            {activeVideo && !showForm ? (
               (() => {
                 const parsed = parseVideoUrl(activeVideo.video_url);
                 if (parsed.type === "raw") {
@@ -302,12 +302,27 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white/30">
                 <Film className="h-16 w-16 mb-2 animate-pulse" />
-                <p className="font-serif">無選定播放的影片</p>
+                <p className="font-serif">{showForm ? "影音投稿進行中..." : "無選定播放的影片"}</p>
               </div>
             )}
 
+            {/* Close / Clear Video Button */}
+            {activeVideo && !showForm && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveVideo(null);
+                  setIsPlayerPlaying(false);
+                }}
+                className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white/90 hover:text-[#FF799C] transition-all cursor-pointer shadow-lg border border-white/10 flex items-center justify-center"
+                title="關閉影片"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+
             {/* Custom Overlay (Only visible when paused and is raw video) */}
-            {activeVideo && parseVideoUrl(activeVideo.video_url).type === "raw" && !isPlayerPlaying && (
+            {activeVideo && !showForm && parseVideoUrl(activeVideo.video_url).type === "raw" && !isPlayerPlaying && (
               <div 
                 onClick={toggleVideoPlayback}
                 className="absolute inset-0 bg-black/35 flex items-center justify-center cursor-pointer transition-all hover:bg-black/20"
@@ -502,7 +517,7 @@ export default function VideoModule({ currentUser, onRefreshData, globalRefreshC
                         ) : (
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-[#6E4B55]/85">點擊選擇手機影片庫 / 媒體檔案</p>
-                            <p className="text-[9px] text-[#6E4B55]/50">支援 MP4, MOV, WebM 等格式，建議 35MB 以內</p>
+                            <p className="text-[9px] text-[#6E4B55]/50">支援 MP4, MOV, WebM 等格式，建議 100MB 以內</p>
                           </div>
                         )}
                       </label>

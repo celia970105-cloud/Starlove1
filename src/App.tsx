@@ -1179,6 +1179,90 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Original Intention Card (網站初衷 - 感人且溫馨) */}
+              <motion.div
+                initial={{ opacity: 0, y: 25 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, ease: "easeOut" }}
+                className="relative p-6 sm:p-10 rounded-[32px] border border-[#FF799C]/20 bg-gradient-to-br from-white/80 via-[#FFF9FA]/80 to-[#FFF3F6]/75 backdrop-blur-md shadow-xl shadow-[#FF799C]/5 overflow-hidden text-[#6E4B55] mt-12"
+              >
+                {/* Glowing backdrop aura */}
+                <div className="absolute -right-24 -top-24 h-48 w-48 rounded-full bg-[#FF799C]/10 blur-3xl pointer-events-none" />
+                <div className="absolute -left-24 -bottom-24 h-48 w-48 rounded-full bg-[#FFCCDD]/20 blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center md:items-start">
+                  {/* Left Column: Core Intention & Floating Hearts */}
+                  <div className="w-full md:w-5/12 text-left space-y-4">
+                    <span className="text-xs font-mono tracking-[0.3em] text-[#FF799C] font-bold block">
+                      OUR STARRY MISSION
+                    </span>
+                    <h3 className="text-2xl sm:text-3xl font-serif font-light text-[#FF799C] tracking-wide leading-tight">
+                      星願初衷：<br />
+                      編織極禹的璀璨星空
+                    </h3>
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FF799C]/10 text-[#FF799C] text-xs font-serif font-medium">
+                      <span>💒</span>
+                      <span>「陪你把異鄉，走成故鄉。」</span>
+                    </div>
+                    <p className="text-xs text-[#6E4B55]/70 leading-relaxed font-sans pt-2">
+                      在這個追光浩瀚的宇宙中，每顆星辰的相遇都是宿命。我們為<strong>張極</strong>與<strong>張澤禹</strong>搭建了這座溫暖的應援星願盒，旨在用愛去灌溉每一次的相遇，為新舊旅人撐起一片永不熄滅的溫柔夜空。
+                    </p>
+                  </div>
+
+                  {/* Right Column: 3 Pillars (New Fans, Old Fans, Submissions) */}
+                  <div className="w-full md:w-7/12 grid grid-cols-1 gap-6">
+                    {/* Pillar 1: New Fans */}
+                    <div className="p-5 rounded-2xl bg-white/60 border border-[#FF799C]/10 hover:border-[#FF799C]/30 transition-all duration-300 shadow-xs flex gap-4">
+                      <div className="h-10 w-10 rounded-full bg-[#FF799C]/10 flex items-center justify-center shrink-0 text-[#FF799C]">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <h4 className="text-xs font-bold tracking-wider text-[#FF799C] uppercase flex items-center gap-1.5 font-serif">
+                          <span>安利新粉</span>
+                          <span className="text-[10px] text-[#6E4B55]/40 font-sans normal-case font-normal">• 遇見最初的悸動</span>
+                        </h4>
+                        <p className="text-[11px] text-[#6E4B55]/75 leading-relaxed font-sans">
+                          我們希望能為所有剛啟程的追光者打開一扇窗，讓新粉看見他們閃閃發光的靈魂，聽見<strong>「TOP唯一雙主唱」</strong>那穿透心靈的歌聲。這裡珍藏的每一張美照、每一支影音、每一幅畫作，都是我們遞給世界的邀請函，讓那些剛萌芽的喜愛，在這裡找到最溫暖的共鳴。
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Pillar 2: Old Fans */}
+                    <div className="p-5 rounded-2xl bg-white/60 border border-[#FF799C]/10 hover:border-[#FF799C]/30 transition-all duration-300 shadow-xs flex gap-4">
+                      <div className="h-10 w-10 rounded-full bg-[#FF799C]/10 flex items-center justify-center shrink-0 text-[#FF799C]">
+                        <Heart className="h-5 w-5 fill-current" />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <h4 className="text-xs font-bold tracking-wider text-[#FF799C] uppercase flex items-center gap-1.5 font-serif">
+                          <span>重燃熱情</span>
+                          <span className="text-[10px] text-[#6E4B55]/40 font-sans normal-case font-normal">• 守護最初的溫暖</span>
+                        </h4>
+                        <p className="text-[11px] text-[#6E4B55]/75 leading-relaxed font-sans">
+                          長路漫漫，追光的日子難免有些許迷茫與疲憊。但別忘了我們曾一同看過最絢爛的星河。這座星願應援站是舊粉重拾溫度的港灣，當你傾聽黑膠機的歌聲、閱讀星星信箱的告白，那些關於「張極與張澤禹，從未改變過」的浪漫，將會在心底重新滾燙。
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Pillar 3: Submissions */}
+                    <div className="p-5 rounded-2xl bg-white/60 border border-[#FF799C]/10 hover:border-[#FF799C]/30 transition-all duration-300 shadow-xs flex gap-4">
+                      <div className="h-10 w-10 rounded-full bg-[#FF799C]/10 flex items-center justify-center shrink-0 text-[#FF799C]">
+                        <Star className="h-5 w-5 fill-current" />
+                      </div>
+                      <div className="space-y-1 text-left">
+                        <h4 className="text-xs font-bold tracking-wider text-[#FF799C] uppercase flex items-center gap-1.5 font-serif">
+                          <span>鼓勵投稿</span>
+                          <span className="text-[10px] text-[#6E4B55]/40 font-sans normal-case font-normal">• 點亮我們的小宇宙</span>
+                        </h4>
+                        <p className="text-[11px] text-[#6E4B55]/75 leading-relaxed font-sans">
+                          星空之所以璀璨，是因為有無數顆星並肩閃耀。不論是一張舞台照、一段回憶影音、一封手寫信、或是一副畫作，你的每一次<strong>「送出投稿」</strong>都是對這個溫馨社區的灌溉。讓我們攜手點亮星宿，用真實的足跡拼湊起屬於我們的極禹星願。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
               {/* Music Player Board Section (Centered below on Home) */}
               <div id="starry-music-box" className="pt-8 border-t border-[#FF799C]/10">
                 <div className="text-center mb-6">

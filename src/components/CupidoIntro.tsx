@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Heart } from "lucide-react";
 
@@ -9,6 +9,12 @@ interface CupidoIntroProps {
 export default function CupidoIntro({ onComplete }: CupidoIntroProps) {
   const [hearts, setHearts] = useState<{ id: number; x: number; y: number; scale: number; delay: number }[]>([]);
   const [arrowShot, setArrowShot] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+
+  // Keep the ref updated with the latest onComplete callback
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  });
 
   useEffect(() => {
     // Generate burst of hearts when the arrow is "shot"
@@ -25,21 +31,23 @@ export default function CupidoIntro({ onComplete }: CupidoIntroProps) {
     }, 1000);
 
     const timerEnd = setTimeout(() => {
-      onComplete();
+      onCompleteRef.current();
     }, 3000);
 
     return () => {
       clearTimeout(timerShot);
       clearTimeout(timerEnd);
     };
-  }, [onComplete]);
+  }, []); // Stable empty dependency array ensures timers are never cleared prematurely
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0c0611]"
+      onClick={() => onCompleteRef.current()}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0c0611] cursor-pointer select-none"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.8, ease: "easeInOut" }}
+      title="點擊螢幕任意處跳過 / Click anywhere to skip"
     >
       {/* Sparkles background */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,121,156,0.1)_0%,transparent_70%)]" />
@@ -144,6 +152,18 @@ export default function CupidoIntro({ onComplete }: CupidoIntroProps) {
           </p>
         </motion.div>
       </div>
+
+      {/* Skip Hint */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0.35, 0.75, 0.35] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute bottom-16 left-0 right-0 text-center pointer-events-none"
+      >
+        <span className="text-[11px] font-sans tracking-widest text-[#FF799C]/80">
+          ✨ 點擊螢幕任意處可跳過動畫 / Click anywhere to skip ✨
+        </span>
+      </motion.div>
 
       {/* Decorative Branding Line */}
       <div className="absolute bottom-6 left-0 right-0 text-center">

@@ -23,7 +23,12 @@ import { User } from "./types";
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !sessionStorage.getItem("starry_intro_seen");
+    }
+    return true;
+  });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeModule, setActiveModule] = useState<string>("home");
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; char: string }[]>([]);
@@ -578,7 +583,14 @@ export default function App() {
       {/* Opening Intro Animation */}
       <AnimatePresence>
         {showIntro && (
-          <CupidoIntro onComplete={() => setShowIntro(false)} />
+          <CupidoIntro 
+            onComplete={() => {
+              setShowIntro(false);
+              if (typeof window !== "undefined") {
+                sessionStorage.setItem("starry_intro_seen", "true");
+              }
+            }} 
+          />
         )}
       </AnimatePresence>
 
